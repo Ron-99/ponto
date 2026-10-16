@@ -16,7 +16,15 @@ import {
 } from "@/components/ui/table";
 import { exportHref, PERIODS, type Period, parseReportParams, rangeFor } from "@/lib/csv";
 import { loadBank } from "@/lib/data";
-import { formatDuration, groupByWeek, weekEnd, weekKey } from "@/lib/hours";
+import {
+  bankLabel,
+  closedCycles,
+  cycleFor,
+  formatDuration,
+  groupByWeek,
+  weekEnd,
+  weekKey,
+} from "@/lib/hours";
 
 export default function Page({ searchParams }: PageProps<"/relatorio">) {
   return (
@@ -36,7 +44,7 @@ function titleFor(period: Period, ref: string) {
 
 async function Report({ searchParams }: Pick<PageProps<"/relatorio">, "searchParams">) {
   const params = await searchParams;
-  const { now, days, total, startDate } = await loadBank();
+  const { now, days, total, startDate, cycles } = await loadBank();
 
   const { period, ref } = parseReportParams(params, now.date);
   const range = { ...rangeFor(period, ref), title: titleFor(period, ref) };
@@ -46,6 +54,8 @@ async function Report({ searchParams }: Pick<PageProps<"/relatorio">, "searchPar
   const worked = visible.reduce((s, d) => s + d.worked, 0);
   const target = visible.reduce((s, d) => s + d.target, 0);
   const balance = visible.reduce((s, d) => s + d.bankDelta, 0);
+  // Os ciclos fechados vêm do banco todo, não só do período em tela.
+  const closed = closedCycles(days, cycles);
 
   const href = (p: Period, r: string) => `/relatorio?periodo=${p}&ref=${r}`;
 
@@ -102,10 +112,29 @@ async function Report({ searchParams }: Pick<PageProps<"/relatorio">, "searchPar
         <Summary label="Meta do período" value={formatDuration(target)} />
         <Summary label="Saldo do período" value={<Balance minutes={balance} />} />
         <Summary
-          label={`Banco total (desde ${formatDate(startDate)})`}
+          label={bankLabel(startDate, cycleFor(now.date, cycles).start)}
           value={<Balance minutes={total} />}
         />
       </div>
+
+      {closed.length > 0 && (
+        <Card size="sm">
+          <CardHeader>
+            <CardTitle>Ciclos fechados</CardTitle>
+            <CardDescription>O saldo com que cada ciclo fechou e voltou a 00:00.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="divide-y">
+              {closed.map((c) => (
+                <li key={c.start} className="flex items-center justify-between gap-3 py-2 text-sm">
+                  <span>{c.label}</span>
+                  <Balance minutes={c.closing} className="font-medium" />
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       {weeks.length === 0 && (
         <p className="text-muted-foreground">Nenhum dia registrado neste período.</p>

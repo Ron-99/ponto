@@ -76,7 +76,7 @@ describe("migrações", () => {
     useDatabase(file);
     await db.listOverrides();
     expect(await columns(client)).toContain("minutes");
-    expect(await version(client)).toBe("2");
+    expect(await version(client)).toBe("3");
     expect(await schedules(client)).toEqual([[SINCE_START, 0, 480, 480, 480, 480, 480, 0]]);
   });
 
@@ -130,7 +130,7 @@ describe("migrações", () => {
     });
     await db.applyMigrations(racing);
     expect(await columns(client)).toContain("minutes");
-    expect(await version(client)).toBe("2");
+    expect(await version(client)).toBe("3");
   });
 
   test("falha de migração propaga", async () => {
@@ -148,7 +148,7 @@ describe("migrações", () => {
     globalForDb.pontoDb = undefined;
     // Uma segunda conexão a um banco já migrado não pode tentar as migrações de novo.
     await expect(db.listOverrides()).resolves.toEqual([]);
-    expect(await version(client)).toBe("2");
+    expect(await version(client)).toBe("3");
 
     // O erro de um ALTER repetido seria engolido pela releitura da versão, então
     // conta os batches: num banco já migrado, nenhum pode ser enviado.
@@ -176,7 +176,7 @@ describe("migração 2: jornada por dia da semana", () => {
     useDatabase(file);
     await db.listOverrides();
     expect(await schedules(client)).toEqual([[SINCE_START, 0, 450, 450, 450, 450, 450, 0]]);
-    expect(await version(client)).toBe("2");
+    expect(await version(client)).toBe("3");
   });
 
   test("migração 2 sem jornada usa 8h", async () => {
@@ -236,7 +236,7 @@ describe("migração 2: jornada por dia da semana", () => {
       },
     });
     await db.applyMigrations(racing);
-    expect(await version(client)).toBe("2");
+    expect(await version(client)).toBe("3");
     expect(await schedules(client)).toHaveLength(1);
   });
 
@@ -247,6 +247,109 @@ describe("migração 2: jornada por dia da semana", () => {
     await expect(db.applyMigrations(client)).rejects.toThrow();
     expect(await version(client)).toBe("1");
     const { rows } = await client.execute("SELECT count(*) AS n FROM work_schedules");
+    expect(Number(rows[0].n)).toBe(0);
+  });
+});
+
+const cycles = async (client: Client) =>
+  (await client.execute("SELECT * FROM bank_cycles ORDER BY valid_from")).rows.map((r) => [
+    r.valid_from,
+    Number(r.months),
+  ]);
+
+// Banco já na versão 2 (jornada por dia da semana), como sai da migração 2.
+async function versionTwoDatabase() {
+  const old = await versionOneDatabase(480);
+  await old.client.batch(
+    [
+      `CREATE TABLE work_schedules (valid_from TEXT PRIMARY KEY,
+        d0 INTEGER NOT NULL, d1 INTEGER NOT NULL, d2 INTEGER NOT NULL, d3 INTEGER NOT NULL,
+        d4 INTEGER NOT NULL, d5 INTEGER NOT NULL, d6 INTEGER NOT NULL)`,
+      "INSERT INTO work_schedules VALUES ('0000-01-01', 0, 480, 480, 480, 480, 480, 0)",
+      "UPDATE settings SET value = '2' WHERE key = 'schema_version'",
+    ],
+    "write",
+  );
+  return old;
+}
+
+describe("migração 3: prazo de compensação", () => {
+  test("migração 3 cria o prazo desde o início", async () => {
+    const { file, client } = await versionTwoDatabase();
+    useDatabase(file);
+    await db.listOverrides();
+    expect(await cycles(client)).toEqual([[SINCE_START, 0]]);
+    expect(await version(client)).toBe("3");
+  });
+
+  test("migra banco sem versão até a 3", async () => {
+    const { file, client } = await oldDatabase();
+    useDatabase(file);
+    await db.listOverrides();
+    expect(await cycles(client)).toEqual([[SINCE_START, 0]]);
+    expect(await schedules(client)).toHaveLength(1);
+    expect(await version(client)).toBe("3");
+  });
+
+  test("migração 3 preserva o saldo", async () => {
+    const { file, client } = await versionTwoDatabase();
+    await client.batch(
+      [
+        "INSERT INTO day_overrides (date, kind, note) VALUES ('2026-10-12', 'feriado', 'Aparecida')",
+        "INSERT INTO punches (date, time, type) VALUES ('2026-10-13', '08:00', 'in')",
+        "INSERT INTO punches (date, time, type) VALUES ('2026-10-13', '18:00', 'out')",
+        "INSERT INTO punches (date, time, type) VALUES ('2026-10-17', '09:00', 'in')",
+        "INSERT INTO punches (date, time, type) VALUES ('2026-10-17', '11:00', 'out')",
+      ],
+      "write",
+    );
+    useDatabase(file);
+    const [overrides, punches, list, migrated] = await Promise.all([
+      db.listOverrides(),
+      db.listPunches(),
+      db.listSchedules(),
+      db.listCycles(),
+    ]);
+    const input = {
+      startDate: "2026-10-12",
+      punches,
+      overrides,
+      schedules: list,
+      now: { date: "2026-10-20", minutes: 0 },
+    };
+    const withCycles = buildReport({ ...input, cycles: migrated }).map((d) => d.accumulated);
+    expect(withCycles).toEqual(buildReport(input).map((d) => d.accumulated));
+    // Seg feriado, ter +120, qua a sex −480 cada, sáb +120, seg 19 −480, ter 20 é hoje.
+    expect(withCycles.at(-1)).toBe(120 - 3 * 480 + 120 - 480);
+  });
+
+  test("migração 3 concorrente segue", async () => {
+    const { file, client } = await versionTwoDatabase();
+    const other = createClient({ url: `file:${file}` });
+    const racing = new Proxy(client, {
+      get(target, prop) {
+        if (prop === "batch") {
+          return async (...args: Parameters<Client["batch"]>) => {
+            await db.applyMigrations(other);
+            return target.batch(...args);
+          };
+        }
+        const value = Reflect.get(target, prop);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    await db.applyMigrations(racing);
+    expect(await version(client)).toBe("3");
+    expect(await cycles(client)).toHaveLength(1);
+  });
+
+  test("falha da migração 3 propaga", async () => {
+    const { client } = await versionTwoDatabase();
+    // A tabela já existe mas a versão não: o CREATE falha e ninguém gravou a versão 3.
+    await client.execute("CREATE TABLE bank_cycles (valid_from TEXT PRIMARY KEY)");
+    await expect(db.applyMigrations(client)).rejects.toThrow();
+    expect(await version(client)).toBe("2");
+    const { rows } = await client.execute("SELECT count(*) AS n FROM bank_cycles");
     expect(Number(rows[0].n)).toBe(0);
   });
 });

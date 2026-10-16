@@ -1,4 +1,13 @@
-import { addDays, eachDayOfInterval, format, parseISO, startOfWeek } from "date-fns";
+import {
+  addDays,
+  addMonths,
+  differenceInCalendarDays,
+  eachDayOfInterval,
+  format,
+  parseISO,
+  startOfMonth,
+  startOfWeek,
+} from "date-fns";
 
 export type PunchType = "in" | "out";
 export type OverrideKind = "feriado" | "folga" | "atestado";
@@ -235,6 +244,8 @@ export type ReportInput = {
   punches: Punch[];
   overrides: DayOverride[];
   schedules: WorkSchedule[];
+  /** Regras do prazo de compensação; sem elas, o banco nunca fecha. */
+  cycles?: BankCycle[];
   now: Now;
 };
 
@@ -246,6 +257,7 @@ export function buildReport({
   punches,
   overrides,
   schedules,
+  cycles = [],
   now,
 }: ReportInput): ReportDay[] {
   if (startDate > now.date) return [];
@@ -271,9 +283,107 @@ export function buildReport({
       jornadaFor(date, schedules),
       now,
     );
+    // O primeiro dia de um ciclo começa o acumulado do zero: o ciclo anterior fechou.
+    if (date !== startDate && cycleFor(date, cycles).start === date) accumulated = 0;
     accumulated += day.bankDelta;
     return { ...day, accumulated };
   });
+}
+
+/** Prazo de compensação que vale a partir de `validFrom`: ciclos de `months` meses (0 = sem prazo). */
+export type BankCycle = { validFrom: string; months: number };
+
+const isoDate = (d: Date) => format(d, "yyyy-MM-dd");
+const dateLabel = (date: string) => format(parseISO(date), "dd/MM/yyyy");
+
+/**
+ * Ciclo do banco que contém a data. Cada regra (menos a "desde o início") começa um ciclo no
+ * seu `validFrom`, e uma regra de N meses começa outro a cada N meses contados dele. O ciclo
+ * termina no dia anterior ao próximo início; `end` vazio quando nenhum início vem depois.
+ */
+export function cycleFor(date: string, cycles: BankCycle[]): { start: string; end: string | null } {
+  let rule: BankCycle = { validFrom: SINCE_START, months: 0 };
+  let nextRule: string | null = null;
+  for (const c of cycles) {
+    if (c.validFrom <= date) {
+      if (c.validFrom > rule.validFrom) rule = c;
+    } else if (!nextRule || c.validFrom < nextRule) nextRule = c.validFrom;
+  }
+  let start = rule.validFrom;
+  let next: string | null = null;
+  if (rule.months > 0) {
+    const from = parseISO(rule.validFrom);
+    for (let k = 1; ; k++) {
+      const candidate = isoDate(addMonths(from, k * rule.months));
+      if (candidate > date) {
+        next = candidate;
+        break;
+      }
+      start = candidate;
+    }
+  }
+  if (nextRule && (!next || nextRule < next)) next = nextRule;
+  return { start, end: next ? isoDate(addDays(parseISO(next), -1)) : null };
+}
+
+export type ClosedCycle = { start: string; end: string; label: string; closing: number };
+
+/** Ciclos que fecharam dentro do banco, do mais recente para o mais antigo. */
+export function closedCycles(days: ReportDay[], cycles: BankCycle[]): ClosedCycle[] {
+  const closed: ClosedCycle[] = [];
+  let start = days[0]?.date;
+  for (let i = 0; i + 1 < days.length; i++) {
+    const next = days[i + 1].date;
+    if (cycleFor(next, cycles).start !== next) continue;
+    const end = days[i].date;
+    closed.push({
+      start,
+      end,
+      label: `${dateLabel(start)} a ${dateLabel(end)}`,
+      closing: days[i].accumulated,
+    });
+    start = next;
+  }
+  return closed.reverse();
+}
+
+/** "+05:30 vencem em 31/12/2026 (daqui a 76 dias)."; null quando o ciclo de hoje não tem fim. */
+export function dueNotice(today: string, total: number, cycles: BankCycle[]) {
+  const { end } = cycleFor(today, cycles);
+  if (!end) return null;
+  const days = differenceInCalendarDays(parseISO(end), parseISO(today));
+  const when = `${dateLabel(end)} (${days === 0 ? "hoje" : days === 1 ? "amanhã" : `daqui a ${days} dias`}).`;
+  if (total > 0) return `${formatDuration(total, true)} vencem em ${when}`;
+  if (total < 0) return `${formatDuration(total, true)} a compensar até ${when}`;
+  return `O ciclo fecha em ${when}`;
+}
+
+/** Rótulo do card do saldo no relatório: o ciclo, quando ele começou depois do banco. */
+export const bankLabel = (startDate: string, cycleStart: string) =>
+  cycleStart > startDate
+    ? `Banco do ciclo (desde ${dateLabel(cycleStart)})`
+    : `Banco total (desde ${dateLabel(startDate)})`;
+
+/** Linhas da lista de prazos em Configurações, da mais recente para a mais antiga. */
+export const cycleRows = (cycles: BankCycle[]) =>
+  [...cycles]
+    .sort((a, b) => b.validFrom.localeCompare(a.validFrom))
+    .map((c) => ({
+      validFrom: c.validFrom,
+      label:
+        c.validFrom === SINCE_START ? "Desde o início" : `A partir de ${dateLabel(c.validFrom)}`,
+      rule:
+        c.months === 0 ? "Sem prazo" : `Ciclos de ${c.months} ${c.months === 1 ? "mês" : "meses"}`,
+    }));
+
+/** Valores iniciais do formulário: o prazo em vigor hoje (4 se não houver), desde o dia 1. */
+export function cycleFormDefaults(cycles: BankCycle[], today: string) {
+  let months = 0;
+  let validFrom = "";
+  for (const c of cycles) {
+    if (c.validFrom <= today && c.validFrom >= validFrom) ({ validFrom, months } = c);
+  }
+  return { validFrom: isoDate(startOfMonth(parseISO(today))), months: months || 4 };
 }
 
 export const weekKey = (date: string) =>
@@ -406,10 +516,13 @@ export type BalancePoint = { date: string; value: number };
 const CHART_DAYS = 56;
 const shortDate = (date: string) => format(parseISO(date), "dd/MM");
 
-/** Acumulado dos últimos 56 dias (ou desde o início do banco) e a frase da variação. */
-export function balanceSeries(days: ReportDay[]) {
+/**
+ * Acumulado dos últimos 56 dias (ou desde o início do banco) e a frase da variação, medida
+ * desde `cycleStart` quando o ciclo em vigor começou dentro da janela.
+ */
+export function balanceSeries(days: ReportDay[], cycleStart = "") {
   const points = days.slice(-CHART_DAYS).map((d) => ({ date: d.date, value: d.accumulated }));
-  const first = points[0];
+  const first = points.find((p) => p.date >= cycleStart) ?? points[0];
   const last = points.at(-1);
   if (!first || !last || points.length < 2) return { points, trend: null, label: null };
   const delta = last.value - first.value;

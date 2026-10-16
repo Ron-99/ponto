@@ -11,9 +11,11 @@ mock.module("next/headers", () => ({
 process.env.PONTO_DB = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "ponto-")), "actions.db");
 delete process.env.APP_PASSWORD;
 
-const { removeSchedule, saveSchedule, setDayOverride } = await import("./actions");
+const { removeCycle, removeSchedule, saveCycle, saveSchedule, setDayOverride } = await import(
+  "./actions"
+);
 const db = await import("@/lib/db");
-const { buildReport, SINCE_START } = await import("@/lib/hours");
+const { buildReport, cycleFor, SINCE_START } = await import("@/lib/hours");
 
 const STANDARD = [0, 480, 480, 480, 480, 480, 0];
 
@@ -232,5 +234,94 @@ describe("jornada por dia da semana", () => {
     expect((await setDayOverride(SAT, "folga", "01:00")).ok).toBe(true);
     expect((await overrideOn(SAT))?.minutes).toBe(60);
     expect(await targetOn(SAT)).toBe(180);
+  });
+});
+
+describe("prazo de compensação", () => {
+  const BASE = { validFrom: SINCE_START, months: 0 };
+  const INVALID_DATE = { ok: false as const, error: "Informe a data de início do ciclo." };
+  const INVALID_MONTHS = {
+    ok: false as const,
+    error: "Escolha um prazo de 1 a 12 meses, ou sem prazo.",
+  };
+
+  beforeEach(async () => {
+    for (const c of await db.listCycles()) {
+      if (c.validFrom !== SINCE_START) await db.deleteCycle(c.validFrom);
+    }
+  });
+
+  test("salva prazo de compensação", async () => {
+    expect(await saveCycle({ validFrom: "2026-09-01", months: 4 })).toEqual({
+      ok: true,
+      message: "Prazo salvo: ciclos de 4 meses a partir de 01/09/2026.",
+    });
+    expect(await db.listCycles()).toEqual([BASE, { validFrom: "2026-09-01", months: 4 }]);
+  });
+
+  test("salva sem prazo com data", async () => {
+    expect(await saveCycle({ validFrom: "2026-09-01", months: 0 })).toEqual({
+      ok: true,
+      message: "Prazo salvo: sem prazo a partir de 01/09/2026.",
+    });
+    expect(await db.listCycles()).toEqual([BASE, { validFrom: "2026-09-01", months: 0 }]);
+  });
+
+  test("mesma data substitui o prazo", async () => {
+    await saveCycle({ validFrom: "2026-09-01", months: 4 });
+    await saveCycle({ validFrom: "2026-09-01", months: 6 });
+    expect(await db.listCycles()).toEqual([BASE, { validFrom: "2026-09-01", months: 6 }]);
+  });
+
+  test("recusa data do ciclo inválida", async () => {
+    for (const validFrom of ["", "2026-13-01", "01/09/2026", SINCE_START]) {
+      expect(await saveCycle({ validFrom, months: 4 })).toEqual(INVALID_DATE);
+    }
+    expect(await db.listCycles()).toEqual([BASE]);
+  });
+
+  test("recusa prazo fora de 0 a 12", async () => {
+    for (const months of [-1, 13, 2.5, Number.NaN]) {
+      expect(await saveCycle({ validFrom: "2026-09-01", months })).toEqual(INVALID_MONTHS);
+    }
+    expect(await db.listCycles()).toEqual([BASE]);
+    expect((await saveCycle({ validFrom: "2026-09-01", months: 12 })).ok).toBe(true);
+    expect(await db.listCycles()).toEqual([BASE, { validFrom: "2026-09-01", months: 12 }]);
+  });
+
+  test("remove regra de prazo", async () => {
+    await saveCycle({ validFrom: "2026-09-01", months: 4 });
+    expect(await removeCycle("2026-09-01")).toEqual({
+      ok: true,
+      message: "Regra de 01/09/2026 removida.",
+    });
+    const cycles = await db.listCycles();
+    expect(cycles).toEqual([BASE]);
+    expect(cycleFor("2026-10-16", cycles)).toEqual({ start: SINCE_START, end: null });
+  });
+
+  test("não remove o prazo desde o início", async () => {
+    expect(await removeCycle(SINCE_START)).toEqual({
+      ok: false,
+      error: "A regra desde o início não pode ser removida.",
+    });
+    expect(await db.listCycles()).toEqual([BASE]);
+  });
+
+  test("prazo exige sessão", async () => {
+    process.env.APP_PASSWORD = "segredo";
+    try {
+      expect(await saveCycle({ validFrom: "2026-09-01", months: 4 })).toEqual({
+        ok: false,
+        error: "Sessão expirada. Recarregue a página e entre de novo.",
+      });
+      expect(await removeCycle(SINCE_START)).toEqual({
+        ok: false,
+        error: "Sessão expirada. Recarregue a página e entre de novo.",
+      });
+    } finally {
+      delete process.env.APP_PASSWORD;
+    }
+    expect(await db.listCycles()).toEqual([BASE]);
   });
 });

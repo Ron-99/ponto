@@ -259,3 +259,26 @@ describe("exportação CSV", () => {
     expect(rowOf(dayOf(punches(MON, "08:00", "14:30")))[5]).toBe("-01:30");
   });
 });
+
+describe("prazo de compensação no csv", () => {
+  test("acumulado do csv zera no ciclo", () => {
+    const days = buildReport({
+      startDate: "2026-05-01",
+      punches: [
+        ...punches("2026-08-31", "08:00", "11:00"),
+        ...punches("2026-09-01", "08:00", "08:30"),
+      ],
+      overrides: [],
+      schedules: [{ validFrom: SINCE_START, minutes: [0, 0, 0, 0, 0, 0, 0] }],
+      cycles: [
+        { validFrom: SINCE_START, months: 0 },
+        { validFrom: "2026-05-01", months: 4 },
+      ],
+      now: { date: "2026-09-02", minutes: 0 },
+    });
+    const lines = reportCsv(days).split("\r\n");
+    const column = HEADER.split(";").indexOf("Acumulado");
+    expect(lines.find((l) => l.startsWith("31/08/2026"))?.split(";")[column]).toBe("03:00");
+    expect(lines.find((l) => l.startsWith("01/09/2026"))?.split(";")[column]).toBe("00:30");
+  });
+});

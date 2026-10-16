@@ -2,7 +2,7 @@ import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 import { type Client, createClient, type InArgs } from "@libsql/client";
-import type { DayOverride, OverrideKind, Punch, PunchType, WorkSchedule } from "./hours";
+import type { BankCycle, DayOverride, OverrideKind, Punch, PunchType, WorkSchedule } from "./hours";
 
 /**
  * Em produção (Vercel) usa o Turso via TURSO_DATABASE_URL/TURSO_AUTH_TOKEN.
@@ -62,6 +62,15 @@ const MIGRATIONS: string[][] = [
     )`,
     `INSERT INTO work_schedules SELECT '0000-01-01', 0, m, m, m, m, m, 0
      FROM (SELECT coalesce((SELECT CAST(value AS INTEGER) FROM settings WHERE key = 'daily_minutes'), 480) AS m)`,
+  ],
+  // 3: prazo de compensação por vigência (0 = sem prazo). A linha 0000-01-01 vale desde o
+  // início e não tem prazo, então nenhum saldo muda.
+  [
+    `CREATE TABLE bank_cycles (
+      valid_from TEXT PRIMARY KEY,
+      months INTEGER NOT NULL CHECK (months BETWEEN 0 AND 12)
+    )`,
+    "INSERT INTO bank_cycles (valid_from, months) VALUES ('0000-01-01', 0)",
   ],
 ];
 
@@ -233,6 +242,24 @@ export const saveSchedule = (s: WorkSchedule) =>
 
 export const deleteSchedule = (validFrom: string) =>
   run("DELETE FROM work_schedules WHERE valid_from = ?", [validFrom]);
+
+export async function listCycles(): Promise<BankCycle[]> {
+  const rows = await all<{ valid_from: string; months: number }>(
+    "SELECT valid_from, months FROM bank_cycles ORDER BY valid_from",
+  );
+  return rows.map((r) => ({ validFrom: String(r.valid_from), months: Number(r.months) }));
+}
+
+/** Grava o prazo que vale a partir de `validFrom`; a mesma data substitui o anterior. */
+export const saveCycle = (c: BankCycle) =>
+  run(
+    `INSERT INTO bank_cycles (valid_from, months) VALUES (?, ?)
+     ON CONFLICT (valid_from) DO UPDATE SET months = excluded.months`,
+    [c.validFrom, c.months],
+  );
+
+export const deleteCycle = (validFrom: string) =>
+  run("DELETE FROM bank_cycles WHERE valid_from = ?", [validFrom]);
 
 export async function firstPunchDate(): Promise<string | null> {
   const [row] = await all<{ d: string | null }>("SELECT min(date) AS d FROM punches");

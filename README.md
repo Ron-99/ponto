@@ -59,6 +59,7 @@ O app pode ser instalado como PWA e abre direto no painel, em tela cheia.
 - **Exportar CSV** (relatório): baixa o período em tela num arquivo que abre direto no Excel em pt-BR, com separador `;`. Cada linha é um dia: batidas, trabalhado, meta, saldo, acumulado, status, abono e observações. Os números são os mesmos da tela.
 - Horas trabalhadas num dia sem jornada (o fim de semana, no padrão) ou em dia abonado contam inteiras como extra.
 - O saldo é acumulado desde a data de início do banco (por padrão, a primeira batida). Durante o dia de hoje, só o excedente entra no total. Assim o saldo não fica negativo no meio do expediente.
+- **Prazo de compensação**: em **Configurações**, informe a cada quantos meses (1 a 12) a empresa paga ou desconta o banco e a data em que o primeiro ciclo começa. No primeiro dia de cada ciclo o saldo volta a 00:00. O painel mostra quanto vence e quando, e o relatório lista os ciclos fechados com o saldo de fechamento de cada um. Cada regra vale a partir da sua data, e uma regra nova fecha o ciclo em andamento no dia anterior. Sem prazo (o padrão), o banco nunca fecha.
 
 ## Scripts
 

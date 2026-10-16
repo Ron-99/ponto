@@ -1,12 +1,19 @@
 import { describe, expect, test } from "bun:test";
 import {
+  type BankCycle,
   balanceChart,
   balanceSeries,
   balanceTone,
+  bankLabel,
   buildReport,
+  closedCycles,
   closeTime,
   cltAlerts,
+  cycleFor,
+  cycleFormDefaults,
+  cycleRows,
   type DayOverride,
+  dueNotice,
   formatDuration,
   groupByWeek,
   nextPunchType,
@@ -657,5 +664,204 @@ describe("jornada por dia da semana", () => {
       validFrom: "2026-10-16",
       hours: ["00:00", "08:00", "08:00", "08:00", "08:00", "08:00", "00:00"],
     });
+  });
+});
+
+describe("prazo de compensação", () => {
+  const BASE: BankCycle = { validFrom: SINCE_START, months: 0 };
+  // Sem jornada: todo minuto trabalhado é extra, e o acumulado é a soma dos minutos.
+  const NO_SCHEDULE: WorkSchedule[] = [{ validFrom: SINCE_START, minutes: [0, 0, 0, 0, 0, 0, 0] }];
+  const minutesOn = (date: string, minutes: number) =>
+    punches(date, "08:00", formatDuration(8 * 60 + minutes));
+  const bank = (startDate: string, list: Punch[], cycles: BankCycle[], today: string) =>
+    buildReport({
+      startDate,
+      punches: list,
+      overrides: [],
+      schedules: NO_SCHEDULE,
+      cycles,
+      now: { date: today, minutes: 0 },
+    });
+  const accumulatedOn = (days: { date: string; accumulated: number }[], date: string) =>
+    days.find((d) => d.date === date)?.accumulated;
+
+  test("ciclo começa na data da regra", () => {
+    const cycles = [BASE, { validFrom: "2026-09-01", months: 0 }];
+    expect(cycleFor("2026-08-31", cycles)).toEqual({ start: SINCE_START, end: "2026-08-31" });
+    expect(cycleFor("2026-09-01", cycles)).toEqual({ start: "2026-09-01", end: null });
+  });
+
+  test("ciclos contados a partir da data da regra", () => {
+    const cycles = [BASE, { validFrom: "2026-01-31", months: 4 }];
+    expect(cycleFor("2026-01-31", cycles)).toEqual({ start: "2026-01-31", end: "2026-05-30" });
+    expect(cycleFor("2026-05-30", cycles)).toEqual({ start: "2026-01-31", end: "2026-05-30" });
+    expect(cycleFor("2026-05-31", cycles)).toEqual({ start: "2026-05-31", end: "2026-09-29" });
+    expect(cycleFor("2026-12-01", cycles)).toEqual({ start: "2026-09-30", end: "2027-01-30" });
+    expect(cycleFor("2027-01-31", cycles).start).toBe("2027-01-31");
+  });
+
+  test("regra nova fecha o ciclo em andamento", () => {
+    const cycles = [
+      { validFrom: "2026-10-01", months: 6 },
+      BASE,
+      { validFrom: "2026-05-01", months: 4 },
+    ];
+    expect(cycleFor("2026-09-15", cycles)).toEqual({ start: "2026-09-01", end: "2026-09-30" });
+    expect(cycleFor("2026-10-01", cycles)).toEqual({ start: "2026-10-01", end: "2027-03-31" });
+  });
+
+  test("acumulado zera no início do ciclo", () => {
+    const cycles = [BASE, { validFrom: "2026-05-01", months: 4 }];
+    const days = bank(
+      "2026-05-01",
+      [...minutesOn("2026-08-31", 180), ...minutesOn("2026-09-01", 30)],
+      cycles,
+      "2026-09-02",
+    );
+    expect(accumulatedOn(days, "2026-08-31")).toBe(180);
+    expect(accumulatedOn(days, "2026-09-01")).toBe(30);
+    expect(closedCycles(days, cycles)).toEqual([
+      { start: "2026-05-01", end: "2026-08-31", label: "01/05/2026 a 31/08/2026", closing: 180 },
+    ]);
+  });
+
+  test("sem prazo o acumulado não zera", () => {
+    const list = [
+      ...punches(MON, "08:00", "18:00"),
+      ...punches(WED, "08:00", "12:00"),
+      ...punches(SAT, "09:00", "11:00"),
+    ];
+    const overrides: DayOverride[] = [{ date: TUE, kind: "folga", note: null }];
+    const input = {
+      startDate: "2026-10-05",
+      punches: list,
+      overrides,
+      schedules: STANDARD,
+      now: past,
+    };
+    for (const days of [buildReport(input), buildReport({ ...input, cycles: [BASE] })]) {
+      let sum = 0;
+      for (const d of days) {
+        sum += d.bankDelta;
+        expect(d.accumulated).toBe(sum);
+      }
+      expect(closedCycles(days, [BASE])).toEqual([]);
+    }
+  });
+
+  test("banco começa no meio do ciclo", () => {
+    const cycles = [BASE, { validFrom: "2026-05-01", months: 4 }];
+    const days = bank("2026-06-15", minutesOn("2026-06-15", 45), cycles, "2026-09-02");
+    expect(accumulatedOn(days, "2026-06-15")).toBe(45);
+    expect(closedCycles(days, cycles).at(-1)).toEqual({
+      start: "2026-06-15",
+      end: "2026-08-31",
+      label: "15/06/2026 a 31/08/2026",
+      closing: 45,
+    });
+  });
+
+  test("linha de vencimento pelo sinal do saldo", () => {
+    const cycles = [BASE, { validFrom: "2026-09-01", months: 4 }];
+    expect(dueNotice("2026-10-16", 330, cycles)).toBe(
+      "+05:30 vencem em 31/12/2026 (daqui a 76 dias).",
+    );
+    expect(dueNotice("2026-10-16", -120, cycles)).toBe(
+      "−02:00 a compensar até 31/12/2026 (daqui a 76 dias).",
+    );
+    expect(dueNotice("2026-10-16", 0, cycles)).toBe(
+      "O ciclo fecha em 31/12/2026 (daqui a 76 dias).",
+    );
+  });
+
+  test("vencimento amanhã e hoje", () => {
+    const cycles = [BASE, { validFrom: "2026-09-01", months: 4 }];
+    expect(dueNotice("2026-12-30", 330, cycles)).toBe("+05:30 vencem em 31/12/2026 (amanhã).");
+    expect(dueNotice("2026-12-31", 330, cycles)).toBe("+05:30 vencem em 31/12/2026 (hoje).");
+  });
+
+  test("sem prazo não mostra vencimento", () => {
+    expect(dueNotice("2026-10-16", 330, [BASE])).toBeNull();
+    expect(dueNotice("2026-10-16", 330, [BASE, { validFrom: "2026-09-01", months: 0 }])).toBeNull();
+  });
+
+  test("regra futura antecipa o vencimento", () => {
+    const future = { validFrom: "2026-11-01", months: 0 };
+    const cycles = [BASE, { validFrom: "2026-09-01", months: 4 }, future];
+    expect(dueNotice("2026-10-16", 330, cycles)).toBe(
+      "+05:30 vencem em 31/10/2026 (daqui a 15 dias).",
+    );
+    expect(dueNotice("2026-10-16", 330, [BASE, future])).toBe(
+      "+05:30 vencem em 31/10/2026 (daqui a 15 dias).",
+    );
+  });
+
+  test("tendência desde o início do ciclo", () => {
+    const cycles = [BASE, { validFrom: "2026-09-01", months: 0 }];
+    const days = bank(
+      "2026-08-25",
+      [
+        ...minutesOn("2026-08-26", 120),
+        ...minutesOn("2026-09-01", 30),
+        ...minutesOn("2026-09-02", 60),
+      ],
+      cycles,
+      "2026-09-03",
+    );
+    expect(balanceSeries(days, "2026-09-01").trend).toBe("Subiu 01:00 desde 01/09.");
+  });
+
+  test("rótulo do banco no relatório", () => {
+    expect(bankLabel("2026-05-01", "2026-09-01")).toBe("Banco do ciclo (desde 01/09/2026)");
+    expect(bankLabel("2026-05-01", "2026-05-01")).toBe("Banco total (desde 01/05/2026)");
+    expect(bankLabel("2026-05-01", SINCE_START)).toBe("Banco total (desde 01/05/2026)");
+  });
+
+  test("ciclos fechados do mais recente", () => {
+    const cycles = [BASE, { validFrom: "2026-05-01", months: 2 }];
+    const days = bank(
+      "2026-05-01",
+      [
+        ...minutesOn("2026-06-30", 60),
+        ...minutesOn("2026-07-01", 30),
+        ...minutesOn("2026-08-31", 120),
+        ...minutesOn("2026-09-14", 15),
+      ],
+      cycles,
+      "2026-09-15",
+    );
+    expect(closedCycles(days, cycles)).toEqual([
+      { start: "2026-07-01", end: "2026-08-31", label: "01/07/2026 a 31/08/2026", closing: 150 },
+      { start: "2026-05-01", end: "2026-06-30", label: "01/05/2026 a 30/06/2026", closing: 60 },
+    ]);
+  });
+
+  test("ciclo que fecha hoje não está fechado", () => {
+    const cycles = [BASE, { validFrom: "2026-09-01", months: 1 }];
+    const days = bank("2026-09-10", minutesOn("2026-09-15", 30), cycles, "2026-09-30");
+    expect(closedCycles(days, cycles)).toEqual([]);
+  });
+
+  test("lista de prazos", () => {
+    const rows = cycleRows([
+      BASE,
+      { validFrom: "2026-09-01", months: 4 },
+      { validFrom: "2026-11-01", months: 1 },
+    ]);
+    expect(rows).toEqual([
+      { validFrom: "2026-11-01", label: "A partir de 01/11/2026", rule: "Ciclos de 1 mês" },
+      { validFrom: "2026-09-01", label: "A partir de 01/09/2026", rule: "Ciclos de 4 meses" },
+      { validFrom: SINCE_START, label: "Desde o início", rule: "Sem prazo" },
+    ]);
+  });
+
+  test("formulário de prazo começa com a regra em vigor", () => {
+    expect(cycleFormDefaults([BASE], "2026-10-16")).toEqual({
+      validFrom: "2026-10-01",
+      months: 4,
+    });
+    expect(cycleFormDefaults([BASE, { validFrom: "2026-09-01", months: 6 }], "2026-10-16")).toEqual(
+      { validFrom: "2026-10-01", months: 6 },
+    );
   });
 });

@@ -1,11 +1,12 @@
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { CycleForm, CycleList } from "@/components/cycle-form";
 import { ScheduleForm, ScheduleList } from "@/components/schedule-form";
 import { SettingsForm } from "@/components/settings-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { currentNow } from "@/lib/data";
-import { firstPunchDate, getSettings, listSchedules } from "@/lib/db";
-import { scheduleFormDefaults, scheduleRows } from "@/lib/hours";
+import { firstPunchDate, getSettings, listCycles, listSchedules } from "@/lib/db";
+import { cycleFormDefaults, cycleRows, scheduleFormDefaults, scheduleRows } from "@/lib/hours";
 
 export default function Page() {
   return (
@@ -17,12 +18,15 @@ export default function Page() {
 
 async function Settings() {
   await connection();
-  const [settings, firstPunch, schedules] = await Promise.all([
+  const [settings, firstPunch, schedules, cycles] = await Promise.all([
     getSettings(),
     firstPunchDate(),
     listSchedules(),
+    listCycles(),
   ]);
-  const defaults = scheduleFormDefaults(schedules, currentNow().date);
+  const today = currentNow().date;
+  const defaults = scheduleFormDefaults(schedules, today);
+  const cycleDefaults = cycleFormDefaults(cycles, today);
   return (
     <div className="grid max-w-2xl gap-6">
       <Card>
@@ -36,6 +40,19 @@ async function Settings() {
         <CardContent className="grid gap-6">
           <ScheduleList rows={scheduleRows(schedules)} />
           <ScheduleForm validFrom={defaults.validFrom} hours={defaults.hours} />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Prazo de compensação</CardTitle>
+          <CardDescription>
+            A cada quantos meses a empresa paga ou desconta o saldo e zera o banco. O painel mostra
+            quanto vence e quando.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-6">
+          <CycleList rows={cycleRows(cycles)} />
+          <CycleForm validFrom={cycleDefaults.validFrom} months={cycleDefaults.months} />
         </CardContent>
       </Card>
       <Card className="max-w-lg">

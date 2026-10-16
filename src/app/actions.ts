@@ -220,3 +220,35 @@ export async function removeSchedule(validFrom: string): Promise<ActionResult> {
   refresh();
   return { ok: true, message: `Jornada de ${dateLabel(validFrom)} removida.` };
 }
+
+const CYCLE_DATE_ERROR: ActionResult = { ok: false, error: "Informe a data de início do ciclo." };
+
+/** Salva o prazo de compensação (`months` = 0 é sem prazo) a partir de `validFrom`. */
+export async function saveCycle(input: {
+  validFrom: string;
+  months: number;
+}): Promise<ActionResult> {
+  if (!(await authorized())) return UNAUTHORIZED;
+  const { validFrom, months } = input;
+  if (validFrom === SINCE_START || !DATE_RE.test(validFrom) || !isValid(parseISO(validFrom))) {
+    return CYCLE_DATE_ERROR;
+  }
+  if (!Number.isInteger(months) || months < 0 || months > 12) {
+    return { ok: false, error: "Escolha um prazo de 1 a 12 meses, ou sem prazo." };
+  }
+  await db.saveCycle({ validFrom, months });
+  refresh();
+  const rule = months === 0 ? "sem prazo" : `ciclos de ${months} ${months === 1 ? "mês" : "meses"}`;
+  return { ok: true, message: `Prazo salvo: ${rule} a partir de ${dateLabel(validFrom)}.` };
+}
+
+export async function removeCycle(validFrom: string): Promise<ActionResult> {
+  if (!(await authorized())) return UNAUTHORIZED;
+  if (validFrom === SINCE_START) {
+    return { ok: false, error: "A regra desde o início não pode ser removida." };
+  }
+  if (!DATE_RE.test(validFrom)) return { ok: false, error: "Data inválida." };
+  await db.deleteCycle(validFrom);
+  refresh();
+  return { ok: true, message: `Regra de ${dateLabel(validFrom)} removida.` };
+}

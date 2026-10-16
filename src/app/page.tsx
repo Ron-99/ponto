@@ -13,6 +13,8 @@ import {
   balanceSeries,
   closeTime,
   cltAlerts,
+  cycleFor,
+  dueNotice,
   formatDuration,
   jornadaFor,
   needsAttention,
@@ -34,7 +36,7 @@ export default function Page() {
 }
 
 async function Dashboard() {
-  const { now, days, total, schedules } = await loadBank();
+  const { now, days, total, schedules, cycles } = await loadBank();
   const today =
     days.find((d) => d.date === now.date) ??
     summarizeDay(now.date, [], null, jornadaFor(now.date, schedules), now);
@@ -53,7 +55,8 @@ async function Dashboard() {
   const weekBalance = week.reduce((s, d) => s + d.bankDelta, 0);
   const attention = days.filter((d) => !d.isToday && needsAttention(d.status));
   const alerts = cltAlerts(days, now.date);
-  const series = balanceSeries(days);
+  const series = balanceSeries(days, cycleFor(now.date, cycles).start);
+  const due = dueNotice(now.date, total, cycles);
 
   return (
     <div className="grid gap-6">
@@ -69,6 +72,7 @@ async function Dashboard() {
           <p className="mt-1 text-sm text-muted-foreground">
             {total > 0 ? "horas a mais acumuladas" : total < 0 ? "horas devendo" : "banco zerado"}
           </p>
+          {due && <p className="mt-1 text-sm">{due}</p>}
         </div>
         <div className="grid gap-2 sm:flex">
           <ClockButton next={nextPunchType(today.punches)} />
