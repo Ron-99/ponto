@@ -16,16 +16,16 @@ Ideias de melhoria, ordenadas pelo quanto ajudam no objetivo principal: saber co
 
 ## Prioridade média
 
-- [ ] **Exportar CSV**
+- [x] **Exportar CSV**
   - Backup dos dados.
   - Conferência mês a mês com o ponto oficial da empresa quando o saldo não bater.
-- [ ] **Alertas da CLT no dia**, como avisos simples no painel:
+- [x] **Alertas da CLT no dia**, como avisos simples no painel:
   - intervalo de almoço menor que 1h numa jornada acima de 6h;
   - mais de 2h extras no dia;
   - menos de 11h de descanso entre a saída de um dia e a entrada do seguinte.
-- [ ] **Gráfico do saldo ao longo do tempo**
+- [x] **Gráfico do saldo ao longo do tempo**
   - Mostrar se o banco está crescendo ou caindo nas últimas semanas, o que a tabela não deixa ver.
-- [ ] **Jornada diferente por dia da semana**
+- [x] **Jornada diferente por dia da semana**
   - Por exemplo, 9h de segunda a quinta e 4h na sexta.
 
 ## Depende da regra da empresa

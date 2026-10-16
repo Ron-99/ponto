@@ -10,7 +10,7 @@
 
 ## Handoff
 
-**Feature**: prioridade média - exportar-csv, alertas-clt, grafico-saldo, jornada-semanal
-**Where**: `plan.md` aprovado e `checks.md` escrito para as quatro (2026-10-16). Nenhum código ainda. Base: `821eac4`.
-**Next step**: build, uma feature por vez (um builder cada), com Verifier ao fim de cada uma.
+**Feature**: nenhuma em andamento
+**Where**: exportar-csv, alertas-clt, grafico-saldo e jornada-semanal verificados (PASS) em 2026-10-16, de `3311983` a `84a0157`. Nada foi enviado nem publicado: falta `git push` e deploy, e a migração 2 roda no Turso na primeira requisição depois do deploy.
+**Next step**: deploy, com aprovação do usuário. Depois, o próximo item do `ROADMAP.md`.
 **Blockers**: none
