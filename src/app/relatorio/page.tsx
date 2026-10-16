@@ -1,6 +1,5 @@
 import { cn } from "cn";
-import { addMonths, addWeeks, endOfMonth, format, parseISO, startOfMonth } from "date-fns";
-import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon, DownloadIcon } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 import { DayDialog } from "@/components/day-dialog";
@@ -15,15 +14,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { exportHref, PERIODS, type Period, parseReportParams, rangeFor } from "@/lib/csv";
 import { loadBank } from "@/lib/data";
 import { formatDuration, groupByWeek, weekEnd, weekKey } from "@/lib/hours";
-
-type Period = "semana" | "mes" | "tudo";
-const PERIODS: { value: Period; label: string }[] = [
-  { value: "semana", label: "Semana" },
-  { value: "mes", label: "Mês" },
-  { value: "tudo", label: "Tudo" },
-];
 
 export default function Page({ searchParams }: PageProps<"/relatorio">) {
   return (
@@ -33,43 +26,20 @@ export default function Page({ searchParams }: PageProps<"/relatorio">) {
   );
 }
 
-const ymd = (d: Date) => format(d, "yyyy-MM-dd");
-
-function rangeFor(period: Period, ref: string) {
-  const d = parseISO(ref);
+function titleFor(period: Period, ref: string) {
   if (period === "semana") {
-    return {
-      from: weekKey(ref),
-      to: weekEnd(ref),
-      prev: ymd(addWeeks(d, -1)),
-      next: ymd(addWeeks(d, 1)),
-      title: `Semana de ${formatDate(weekKey(ref), "dd/MM")} a ${formatDate(weekEnd(ref), "dd/MM/yyyy")}`,
-    };
+    return `Semana de ${formatDate(weekKey(ref), "dd/MM")} a ${formatDate(weekEnd(ref), "dd/MM/yyyy")}`;
   }
-  if (period === "mes") {
-    return {
-      from: ymd(startOfMonth(d)),
-      to: ymd(endOfMonth(d)),
-      prev: ymd(addMonths(d, -1)),
-      next: ymd(addMonths(d, 1)),
-      title: formatDate(ref, "MMMM 'de' yyyy"),
-    };
-  }
-  return { from: "0000-00-00", to: "9999-12-31", prev: null, next: null, title: "Todo o período" };
+  if (period === "mes") return formatDate(ref, "MMMM 'de' yyyy");
+  return "Todo o período";
 }
 
 async function Report({ searchParams }: Pick<PageProps<"/relatorio">, "searchParams">) {
   const params = await searchParams;
   const { now, days, total, startDate } = await loadBank();
 
-  const period: Period = PERIODS.some((p) => p.value === params.periodo)
-    ? (params.periodo as Period)
-    : "mes";
-  const ref =
-    typeof params.ref === "string" && /^\d{4}-\d{2}-\d{2}$/.test(params.ref)
-      ? params.ref
-      : now.date;
-  const range = rangeFor(period, ref);
+  const { period, ref } = parseReportParams(params, now.date);
+  const range = { ...rangeFor(period, ref), title: titleFor(period, ref) };
   const visible = days.filter((d) => d.date >= range.from && d.date <= range.to);
   const weeks = groupByWeek(visible).reverse();
 
@@ -117,6 +87,14 @@ async function Report({ searchParams }: Pick<PageProps<"/relatorio">, "searchPar
             </Link>
           )}
         </div>
+        <a
+          href={exportHref(period, ref)}
+          download
+          className={buttonVariants({ variant: "outline", size: "sm" })}
+        >
+          <DownloadIcon />
+          Exportar CSV
+        </a>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">

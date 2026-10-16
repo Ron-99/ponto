@@ -32,3 +32,11 @@ test("páginas continuam exigindo sessão", () => {
     expect(new URL(response.headers.get("location") ?? "").pathname).toBe("/login");
   }
 });
+
+test("exportação exige sessão", () => {
+  const response = visit("/relatorio/csv?periodo=mes&ref=2026-10-05");
+  expect(response.status).toBe(307);
+  const location = new URL(response.headers.get("location") ?? "");
+  expect(location.pathname).toBe("/login");
+  expect(location.searchParams.get("next")).toBe("/relatorio/csv?periodo=mes&ref=2026-10-05");
+});

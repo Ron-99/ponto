@@ -48,6 +48,23 @@ export const OVERRIDE_LABELS: Record<OverrideKind, string> = {
   atestado: "Atestado",
 };
 
+const STATUS_LABELS: Record<DayStatus, string> = {
+  ok: "OK",
+  "em-andamento": "Em andamento",
+  incompleto: "Batida ímpar",
+  inconsistente: "Inconsistente",
+  falta: "Sem batidas",
+  abonado: "Abonado",
+  "folga-semanal": "Fim de semana",
+  pendente: "Sem batidas",
+};
+
+/** Rótulo do status do dia; num dia abonado, o tipo do abono. */
+export const statusLabel = (day: DaySummary) =>
+  day.status === "abonado" && day.override
+    ? OVERRIDE_LABELS[day.override.kind]
+    : STATUS_LABELS[day.status];
+
 export const toMinutes = (time: string) => {
   const [h, m] = time.split(":").map(Number);
   return h * 60 + m;

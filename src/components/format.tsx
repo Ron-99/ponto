@@ -7,8 +7,8 @@ import {
   type DayStatus,
   type DaySummary,
   formatDuration,
-  OVERRIDE_LABELS,
   partialOverrideLabel,
+  statusLabel,
 } from "@/lib/hours";
 
 /** Formata em pt-BR com a primeira letra maiúscula ("Quinta-feira, 15 de outubro"). */
@@ -25,29 +25,25 @@ export function Balance({ minutes, className }: { minutes: number; className?: s
   );
 }
 
-const STATUS: Record<
-  DayStatus,
-  { label: string; variant: "default" | "secondary" | "destructive" | "outline" }
-> = {
-  ok: { label: "OK", variant: "secondary" },
-  "em-andamento": { label: "Em andamento", variant: "default" },
-  incompleto: { label: "Batida ímpar", variant: "destructive" },
-  inconsistente: { label: "Inconsistente", variant: "destructive" },
-  falta: { label: "Sem batidas", variant: "destructive" },
-  abonado: { label: "Abonado", variant: "outline" },
-  "folga-semanal": { label: "Fim de semana", variant: "outline" },
-  pendente: { label: "Sem batidas", variant: "outline" },
+const VARIANT: Record<DayStatus, "default" | "secondary" | "destructive" | "outline"> = {
+  ok: "secondary",
+  "em-andamento": "default",
+  incompleto: "destructive",
+  inconsistente: "destructive",
+  falta: "destructive",
+  abonado: "outline",
+  "folga-semanal": "outline",
+  pendente: "outline",
 };
 
 export function StatusBadge({ day }: { day: DaySummary }) {
-  const s = STATUS[day.status];
-  const label =
-    day.status === "abonado" && day.override ? OVERRIDE_LABELS[day.override.kind] : s.label;
+  const variant = VARIANT[day.status];
+  const label = statusLabel(day);
   const partial = partialOverrideLabel(day.override);
-  if (!partial) return <Badge variant={s.variant}>{label}</Badge>;
+  if (!partial) return <Badge variant={variant}>{label}</Badge>;
   return (
     <span className="inline-flex flex-wrap gap-1">
-      <Badge variant={s.variant}>{label}</Badge>
+      <Badge variant={variant}>{label}</Badge>
       <Badge variant="outline">{partial}</Badge>
     </span>
   );

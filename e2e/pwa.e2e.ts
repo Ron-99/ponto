@@ -232,6 +232,58 @@ describe("PWA", () => {
   }, 30_000);
 });
 
+describe("exportação CSV", () => {
+  const HEADER =
+    "Data;Dia;Batidas;Trabalhado;Meta;Saldo;Acumulado;Status;Abono;Horas abonadas;Observações\r\n";
+
+  const withSession = async (pathname: string) => {
+    process.env.APP_PASSWORD = PASSWORD;
+    const { sessionToken } = await import("../src/lib/auth");
+    return fetch(`${BASE}${pathname}`, {
+      redirect: "manual",
+      headers: { cookie: `ponto_session=${sessionToken()}` },
+    });
+  };
+
+  /** Corpo como bytes: `text()` removeria o BOM que o teste precisa ver. */
+  const bytes = async (response: Response) => new Uint8Array(await response.arrayBuffer());
+  const decode = (body: Uint8Array) => new TextDecoder("utf-8", { ignoreBOM: true }).decode(body);
+
+  test("csv é baixado com sessão", async () => {
+    const response = await withSession("/relatorio/csv?periodo=mes&ref=2026-10-05");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/csv; charset=utf-8");
+    expect(response.headers.get("content-disposition")).toBe(
+      'attachment; filename="ponto-2026-10.csv"',
+    );
+    const body = await bytes(response);
+    expect([...body.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+    expect(decode(body).startsWith(`﻿${HEADER}`)).toBe(true);
+
+    // O relatório tem o link com o período em tela.
+    const html = await (await withSession("/relatorio?periodo=mes&ref=2026-10-05")).text();
+    expect(html).toMatch(
+      /<a href="\/relatorio\/csv\?periodo=mes&amp;ref=2026-10-05"[^>]*>[\s\S]*?Exportar CSV<\/a>/,
+    );
+  });
+
+  test("csv de mês futuro só tem cabeçalho", async () => {
+    const response = await withSession("/relatorio/csv?periodo=mes&ref=2099-01-01");
+    expect(response.status).toBe(200);
+    expect(decode(await bytes(response))).toBe(`﻿${HEADER}`);
+  });
+
+  test("csv exige sessão", async () => {
+    const response = await get("/relatorio/csv?periodo=mes&ref=2026-10-05");
+    expect(response.status).toBe(307);
+    const location = new URL(response.headers.get("location") ?? "", BASE);
+    expect(location.pathname).toBe("/login");
+    expect(location.searchParams.get("next")).toBe("/relatorio/csv?periodo=mes&ref=2026-10-05");
+    expect(response.headers.get("content-type") ?? "").not.toContain("text/csv");
+    expect(await response.text()).not.toContain("Data;Dia;Batidas");
+  });
+});
+
 type Send = (method: string, params?: object) => Promise<{ result: { value: unknown } }>;
 
 /** Conecta no primeiro alvo de página do Chrome via DevTools Protocol. */

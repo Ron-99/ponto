@@ -11,7 +11,7 @@ bun install
 bun dev          # http://localhost:3000
 ```
 
-Os dados ficam em `data/ponto.db` (crie um backup copiando esse arquivo). Use a variável `PONTO_DB` para apontar para outro arquivo.
+Os dados ficam em `data/ponto.db` (crie um backup copiando esse arquivo). Use a variável `PONTO_DB` para apontar para outro arquivo. Em qualquer ambiente, inclusive em produção, o botão **Exportar CSV** do relatório baixa o período em tela; com "Tudo", é o histórico inteiro, um dia por linha.
 
 Para usar no dia a dia, prefira o build de produção:
 
@@ -56,6 +56,7 @@ O app pode ser instalado como PWA e abre direto no painel, em tela cheia.
 - Um dia útil passado sem batidas conta −8h. Marque feriados, folgas e atestados como **abono** (meta de 0h).
 - **Feriados nacionais** são abonados automaticamente. Os de cada ano do banco são importados uma vez da [BrasilAPI](https://brasilapi.com.br/docs#tag/Feriados-Nacionais), incluindo Carnaval e Corpus Christi. Se você trabalha num deles, marque o dia como "Dia normal", e ele não volta. Abonos que você já tinha marcado não são alterados. Feriados municipais e pontes continuam manuais.
 - **Abono parcial**: preencha as horas abonadas (HH:MM) antes de escolher o tipo do abono. A meta do dia vira a jornada menos essas horas. Por exemplo, uma consulta de 2h com atestado deixa a meta em 6h. Só vale para dias úteis, e as horas precisam ser menores que a jornada.
+- **Exportar CSV** (relatório): baixa o período em tela num arquivo que abre direto no Excel em pt-BR, com separador `;`. Cada linha é um dia: batidas, trabalhado, meta, saldo, acumulado, status, abono e observações. Os números são os mesmos da tela.
 - Horas trabalhadas no fim de semana ou em dia abonado contam inteiras como extra.
 - O saldo é acumulado desde a data de início do banco (por padrão, a primeira batida). Durante o dia de hoje, só o excedente entra no total. Assim o saldo não fica negativo no meio do expediente.
 

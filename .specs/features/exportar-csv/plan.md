@@ -81,7 +81,7 @@ Cada coluna traz o que é preciso para conferir o dia com o espelho de ponto.
 
 **Acceptance Criteria**
 
-9. The system SHALL escrever `Data` como `dd/MM/yyyy` e `Dia` como o nome curto em pt-BR com inicial maiúscula (`Seg`, `Ter`, ...), como no relatório
+9. The system SHALL escrever `Data` como `dd/MM/yyyy` e `Dia` como o nome do dia em pt-BR com inicial maiúscula (`Segunda`, `Terça`, ..., `Sábado`), como no relatório
 10. The system SHALL escrever `Batidas` como os horários do dia em ordem, separados por espaço (ex.: `08:00 12:00 13:00 17:30`), e vazio num dia sem batidas
 11. The system SHALL escrever `Trabalhado`, `Meta`, `Saldo` e `Acumulado` como `HH:MM`, com `-` no começo quando negativo e sem `+` quando positivo (ex.: `-01:30`, `00:45`)
 12. WHEN o dia é hoje THEN the system SHALL escrever em `Saldo` o mesmo valor que o relatório mostra para hoje (só o excedente, `bankDelta`)
