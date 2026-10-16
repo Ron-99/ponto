@@ -12,6 +12,6 @@
 ## Handoff
 
 **Feature**: nenhuma em andamento
-**Where**: exportar-csv, alertas-clt, grafico-saldo e jornada-semanal verificados (PASS) em 2026-10-16, de `3311983` a `84a0157`. prazo-compensacao verificado (PASS) em 2026-10-16, de `78b3f53` a `e7a8237`. Nada foi enviado nem publicado: falta `git push` e deploy, e as migrações 2 e 3 rodam no Turso na primeira requisição depois do deploy.
-**Next step**: deploy, com aprovação do usuário. Depois, o próximo item do `ROADMAP.md`.
+**Where**: exportar-csv, alertas-clt, grafico-saldo, jornada-semanal e prazo-compensacao verificados (PASS) em 2026-10-16. Tudo enviado (`543caea`) e publicado na Vercel em 2026-10-16. As migrações 2 e 3 rodam no Turso na primeira requisição autenticada depois do deploy.
+**Next step**: abrir o app em produção para aplicar as migrações e conferir o saldo. Depois, o próximo item do `ROADMAP.md` ("Lembrete de saída").
 **Blockers**: none
