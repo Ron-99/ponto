@@ -123,5 +123,23 @@ describe("migrações", () => {
     // Uma segunda conexão a um banco em versão 1 não pode tentar o ALTER de novo.
     await expect(db.listOverrides()).resolves.toEqual([]);
     expect(await version(client)).toBe("1");
+
+    // O erro de um ALTER repetido seria engolido pela releitura da versão, então
+    // conta os batches: num banco já migrado, nenhum pode ser enviado.
+    const batches: unknown[] = [];
+    const counting = new Proxy(client, {
+      get(target, prop) {
+        if (prop === "batch") {
+          return (...args: Parameters<Client["batch"]>) => {
+            batches.push(args[0]);
+            return target.batch(...args);
+          };
+        }
+        const value = Reflect.get(target, prop);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    await db.applyMigrations(counting);
+    expect(batches).toHaveLength(0);
   });
 });
