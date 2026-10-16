@@ -40,6 +40,13 @@ Opcional: `APP_TIMEZONE` define o fuso usado para "agora". O padrão é `America
 
 Para migrar os dados locais para o Turso, faça isto antes de abrir o app em produção, enquanto o banco ainda está vazio: gere o dump com `sqlite3 data/ponto.db .dump > dump.sql` e importe com `turso db shell ponto < dump.sql`.
 
+## Instalar no celular
+
+O app pode ser instalado como PWA e abre direto no painel, em tela cheia.
+
+- **Android (Chrome):** menu ⋮ → **Instalar app** (ou **Adicionar à tela inicial**).
+- **iPhone (Safari):** botão Compartilhar → **Adicionar à Tela de Início**. O app instalado tem cookies separados dos do Safari, então peça a senha uma vez dentro dele.
+
 ## Regras
 
 - Jornada padrão de 8h por dia útil (segunda a sexta) = 40h por semana. A jornada pode ser alterada em **Configurações**.
@@ -58,5 +65,6 @@ Para migrar os dados locais para o Turso, faça isto antes de abrir o app em pro
 | ---------------- | ---------------------------- |
 | `bun dev`        | servidor de desenvolvimento  |
 | `bun run test`   | testes (regras, actions e banco) |
+| `bun run test:e2e` | build de produção + testes do PWA (precisa do Chrome) |
 | `bun run lint`   | Biome (lint + formatação)    |
 | `bun run format` | Biome com correções          |

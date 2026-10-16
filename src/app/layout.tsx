@@ -1,5 +1,5 @@
 import { ClockIcon } from "lucide-react";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Nav } from "@/components/nav";
 import { Toaster } from "@/components/ui/sonner";
@@ -19,6 +19,12 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Ponto · Banco de horas",
   description: "Registro de ponto pessoal com banco de horas",
+  // iOS: abrir pela tela inicial em tela cheia, com o nome curto embaixo do ícone.
+  appleWebApp: { capable: true, title: "Ponto", statusBarStyle: "default" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#ffffff",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

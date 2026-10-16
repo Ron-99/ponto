@@ -10,6 +10,6 @@
 ## Handoff
 
 **Feature**: pwa
-**Where**: abono-parcial e feriados-nacionais commitados; pwa com plano aprovado, sem checks
-**Next step**: escrever `.specs/features/pwa/checks.md`
+**Where**: as três features de prioridade alta estão commitadas. abono-parcial e feriados-nacionais estão verificados (PASS); pwa está em verificação.
+**Next step**: confirmar a instalação num celular real (AC 6 e 8 do pwa) e fazer deploy, que ainda não foi feito
 **Blockers**: none

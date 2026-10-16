@@ -13,7 +13,8 @@ import os from "node:os";
 import path from "node:path";
 import { type Client, createClient } from "@libsql/client";
 
-mock.module("next/server", () => ({ connection: async () => {} }));
+const realServer = await import("next/server");
+mock.module("next/server", () => ({ ...realServer, connection: async () => {} }));
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ponto-feriados-"));
 process.env.PONTO_DB = path.join(dir, "unused.db");

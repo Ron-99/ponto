@@ -4,7 +4,9 @@ import os from "node:os";
 import path from "node:path";
 
 mock.module("next/cache", () => ({ refresh: () => {} }));
-mock.module("next/headers", () => ({ cookies: async () => ({ get: () => undefined }) }));
+mock.module("next/headers", () => ({
+  cookies: async () => ({ get: () => undefined, set: () => {} }),
+}));
 
 process.env.PONTO_DB = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "ponto-")), "actions.db");
 delete process.env.APP_PASSWORD;
