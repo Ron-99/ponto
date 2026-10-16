@@ -123,7 +123,7 @@ describe("importação de feriados", () => {
     fakeApi({
       "2026": [
         TIRADENTES,
-        { date: "2026-4-22", name: "sem zero" },
+        { date: "2026-4-21", name: "sem zero" },
         { date: "21/04/2026", name: "formato br" },
         { date: "2025-12-25", name: "ano anterior" },
       ],
