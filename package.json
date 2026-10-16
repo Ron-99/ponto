@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
-    "better-sqlite3": "^13.0.3",
+    "@libsql/client": "^0.18.0",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
     "date-fns": "^4.4.0",
@@ -29,7 +29,6 @@
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",
     "@tailwindcss/turbopack": "^4",
-    "@types/better-sqlite3": "^9.6.0",
     "@types/bun": "^1.4.3",
     "@types/node": "^20",
     "@types/react": "^19",

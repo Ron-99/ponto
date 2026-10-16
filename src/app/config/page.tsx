@@ -15,7 +15,7 @@ export default function Page() {
 
 async function Settings() {
   await connection();
-  const settings = getSettings();
+  const [settings, firstPunch] = await Promise.all([getSettings(), firstPunchDate()]);
   return (
     <Card className="max-w-lg">
       <CardHeader>
@@ -29,7 +29,7 @@ async function Settings() {
         <SettingsForm
           dailyHours={toTime(settings.dailyMinutes)}
           startDate={settings.startDate ?? ""}
-          firstPunch={firstPunchDate()}
+          firstPunch={firstPunch}
         />
       </CardContent>
     </Card>

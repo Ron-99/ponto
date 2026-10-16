@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Nav } from "@/components/nav";
 import { Toaster } from "@/components/ui/sonner";
+import { authEnabled } from "@/lib/auth";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -30,7 +31,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               <ClockIcon className="size-5" />
               Ponto
             </span>
-            <Nav />
+            <Nav canLogout={authEnabled()} />
           </div>
         </header>
         <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">{children}</main>

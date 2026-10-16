@@ -1,8 +1,10 @@
 "use client";
 
 import { cn } from "cn";
+import { LogOutIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { logout } from "@/app/login/actions";
 
 const LINKS = [
   { href: "/", label: "Painel" },
@@ -10,10 +12,11 @@ const LINKS = [
   { href: "/config", label: "Configurações" },
 ] as const;
 
-export function Nav() {
+export function Nav({ canLogout }: { canLogout: boolean }) {
   const pathname = usePathname();
+  if (pathname === "/login") return null;
   return (
-    <nav className="flex gap-1 text-sm">
+    <nav className="flex items-center gap-1 text-sm">
       {LINKS.map((l) => (
         <Link
           key={l.href}
@@ -26,6 +29,18 @@ export function Nav() {
           {l.label}
         </Link>
       ))}
+      {canLogout && (
+        <form action={logout}>
+          <button
+            type="submit"
+            aria-label="Sair"
+            title="Sair"
+            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <LogOutIcon className="size-4" />
+          </button>
+        </form>
+      )}
     </nav>
   );
 }

@@ -1,109 +1,125 @@
 import "server-only";
 import fs from "node:fs";
 import path from "node:path";
-import Database from "better-sqlite3";
+import { type Client, createClient, type InArgs } from "@libsql/client";
 import type { DayOverride, OverrideKind, Punch, PunchType } from "./hours";
 
-const DB_PATH = process.env.PONTO_DB ?? path.join(process.cwd(), "data", "ponto.db");
-
-function open() {
-  fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
-  const db = new Database(DB_PATH);
-  db.pragma("journal_mode = WAL");
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS punches (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      date TEXT NOT NULL,
-      time TEXT NOT NULL,
-      type TEXT NOT NULL CHECK (type IN ('in', 'out')),
-      source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('clock', 'manual')),
-      note TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
-    );
-    CREATE INDEX IF NOT EXISTS punches_date ON punches (date, time);
-    CREATE TABLE IF NOT EXISTS day_overrides (
-      date TEXT PRIMARY KEY,
-      kind TEXT NOT NULL CHECK (kind IN ('feriado', 'folga', 'atestado')),
-      note TEXT
-    );
-    CREATE TABLE IF NOT EXISTS settings (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    );
-  `);
-  return db;
+/**
+ * Em produção (Vercel) usa o Turso via TURSO_DATABASE_URL/TURSO_AUTH_TOKEN.
+ * Localmente usa um arquivo SQLite em data/ponto.db (ou PONTO_DB).
+ */
+function connect(): Client {
+  const url = process.env.TURSO_DATABASE_URL;
+  if (url) return createClient({ url, authToken: process.env.TURSO_AUTH_TOKEN });
+  if (process.env.VERCEL) {
+    throw new Error("Configure TURSO_DATABASE_URL e TURSO_AUTH_TOKEN nas variáveis da Vercel.");
+  }
+  const file = process.env.PONTO_DB ?? path.join(process.cwd(), "data", "ponto.db");
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  return createClient({ url: `file:${file}` });
 }
 
-// Reaproveita a conexão entre recarregamentos do dev server.
-const globalForDb = globalThis as unknown as { pontoDb?: Database.Database };
-const db = globalForDb.pontoDb ?? open();
-globalForDb.pontoDb = db;
+const SCHEMA = [
+  `CREATE TABLE IF NOT EXISTS punches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    time TEXT NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('in', 'out')),
+    source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('clock', 'manual')),
+    note TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS punches_date ON punches (date, time)",
+  `CREATE TABLE IF NOT EXISTS day_overrides (
+    date TEXT PRIMARY KEY,
+    kind TEXT NOT NULL CHECK (kind IN ('feriado', 'folga', 'atestado')),
+    note TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  )`,
+];
+
+// Reaproveita a conexão (e a migração) entre requisições e recarregamentos do dev server.
+const globalForDb = globalThis as unknown as { pontoDb?: Promise<Client> };
+
+function db(): Promise<Client> {
+  globalForDb.pontoDb ??= (async () => {
+    const client = connect();
+    await client.batch(SCHEMA, "write");
+    return client;
+  })().catch((error) => {
+    globalForDb.pontoDb = undefined; // permite tentar de novo na próxima requisição
+    throw error;
+  });
+  return globalForDb.pontoDb;
+}
+
+/** Executa uma consulta e devolve as linhas como objetos simples (serializáveis). */
+async function all<T>(sql: string, args: InArgs = []): Promise<T[]> {
+  const result = await (await db()).execute({ sql, args });
+  return result.rows.map((row) => Object.fromEntries(result.columns.map((c) => [c, row[c]])) as T);
+}
+
+async function run(sql: string, args: InArgs = []) {
+  await (await db()).execute({ sql, args });
+}
 
 const PUNCH_COLUMNS = "id, date, time, type, note";
 
-export function listPunches(from?: string, to?: string): Punch[] {
-  return db
-    .prepare(
-      `SELECT ${PUNCH_COLUMNS} FROM punches
-       WHERE date >= coalesce(?, '0000-00-00') AND date <= coalesce(?, '9999-99-99')
-       ORDER BY date, time, id`,
-    )
-    .all(from ?? null, to ?? null) as Punch[];
-}
+export const listPunches = (from?: string, to?: string) =>
+  all<Punch>(
+    `SELECT ${PUNCH_COLUMNS} FROM punches
+     WHERE date >= coalesce(?, '0000-00-00') AND date <= coalesce(?, '9999-99-99')
+     ORDER BY date, time, id`,
+    [from ?? null, to ?? null],
+  );
 
 export const punchesOn = (date: string) => listPunches(date, date);
 
-export const getPunch = (id: number) =>
-  db.prepare(`SELECT ${PUNCH_COLUMNS} FROM punches WHERE id = ?`).get(id) as Punch | undefined;
+export const getPunch = async (id: number) =>
+  (await all<Punch>(`SELECT ${PUNCH_COLUMNS} FROM punches WHERE id = ?`, [id]))[0];
 
-export function insertPunch(p: {
+export const insertPunch = (p: {
   date: string;
   time: string;
   type: PunchType;
   source: "clock" | "manual";
   note?: string | null;
-}) {
-  db.prepare("INSERT INTO punches (date, time, type, source, note) VALUES (?, ?, ?, ?, ?)").run(
+}) =>
+  run("INSERT INTO punches (date, time, type, source, note) VALUES (?, ?, ?, ?, ?)", [
     p.date,
     p.time,
     p.type,
     p.source,
     p.note || null,
-  );
-}
+  ]);
 
-export function updatePunch(
+export const updatePunch = (
   id: number,
   p: { time: string; type: PunchType; note?: string | null },
-) {
-  db.prepare("UPDATE punches SET time = ?, type = ?, note = ? WHERE id = ?").run(
+) =>
+  run("UPDATE punches SET time = ?, type = ?, note = ? WHERE id = ?", [
     p.time,
     p.type,
     p.note || null,
     id,
-  );
-}
+  ]);
 
-export function deletePunch(id: number) {
-  db.prepare("DELETE FROM punches WHERE id = ?").run(id);
-}
+export const deletePunch = (id: number) => run("DELETE FROM punches WHERE id = ?", [id]);
 
-export function listOverrides(): DayOverride[] {
-  return db
-    .prepare("SELECT date, kind, note FROM day_overrides ORDER BY date")
-    .all() as DayOverride[];
-}
+export const listOverrides = () =>
+  all<DayOverride>("SELECT date, kind, note FROM day_overrides ORDER BY date");
 
-export function setOverride(date: string, kind: OverrideKind | null, note?: string | null) {
-  if (kind) {
-    db.prepare(
-      `INSERT INTO day_overrides (date, kind, note) VALUES (?, ?, ?)
-       ON CONFLICT (date) DO UPDATE SET kind = excluded.kind, note = excluded.note`,
-    ).run(date, kind, note || null);
-  } else {
-    db.prepare("DELETE FROM day_overrides WHERE date = ?").run(date);
-  }
-}
+export const setOverride = (date: string, kind: OverrideKind | null, note?: string | null) =>
+  kind
+    ? run(
+        `INSERT INTO day_overrides (date, kind, note) VALUES (?, ?, ?)
+         ON CONFLICT (date) DO UPDATE SET kind = excluded.kind, note = excluded.note`,
+        [date, kind, note || null],
+      )
+    : run("DELETE FROM day_overrides WHERE date = ?", [date]);
 
 export type Settings = {
   dailyMinutes: number;
@@ -111,11 +127,8 @@ export type Settings = {
   startDate: string | null;
 };
 
-export function getSettings(): Settings {
-  const rows = db.prepare("SELECT key, value FROM settings").all() as {
-    key: string;
-    value: string;
-  }[];
+export async function getSettings(): Promise<Settings> {
+  const rows = await all<{ key: string; value: string }>("SELECT key, value FROM settings");
   const map = new Map(rows.map((r) => [r.key, r.value]));
   return {
     dailyMinutes: Number(map.get("daily_minutes") ?? 480),
@@ -123,19 +136,19 @@ export function getSettings(): Settings {
   };
 }
 
-export function saveSettings(s: Settings) {
-  const upsert = db.prepare(
-    "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+export async function saveSettings(s: Settings) {
+  const upsert =
+    "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value";
+  await (await db()).batch(
+    [
+      { sql: upsert, args: ["daily_minutes", String(s.dailyMinutes)] },
+      { sql: upsert, args: ["start_date", s.startDate ?? ""] },
+    ],
+    "write",
   );
-  db.transaction(() => {
-    upsert.run("daily_minutes", String(s.dailyMinutes));
-    upsert.run("start_date", s.startDate ?? "");
-  })();
 }
 
-export function firstPunchDate(): string | null {
-  const row = db.prepare("SELECT min(date) AS d FROM punches").get() as {
-    d: string | null;
-  };
-  return row.d;
+export async function firstPunchDate(): Promise<string | null> {
+  const [row] = await all<{ d: string | null }>("SELECT min(date) AS d FROM punches");
+  return row?.d ?? null;
 }

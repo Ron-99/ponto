@@ -2,7 +2,7 @@
 
 Ponto eletrônico pessoal que mostra quanto você está devendo ou tem de crédito no banco de horas.
 
-Stack: Next.js 16 (App Router, Server Actions), Tailwind v4, shadcn/ui, Bun, Biome e SQLite (better-sqlite3).
+Stack: Next.js 16 (App Router, Server Actions), Tailwind v4, shadcn/ui, Bun, Biome e SQLite via libSQL (arquivo local ou [Turso](https://turso.tech) em produção).
 
 ## Uso
 
@@ -18,6 +18,27 @@ Para usar no dia a dia, prefira o build de produção:
 ```bash
 bun run build && bun run start
 ```
+
+## Deploy na Vercel (com Turso)
+
+A Vercel não tem disco gravável, então o arquivo SQLite local não funciona lá. Em produção o app usa o Turso, que é SQLite hospedado.
+
+1. Crie um banco no Turso. Pelo [painel](https://app.turso.tech) ou pela CLI:
+   ```bash
+   turso db create ponto
+   turso db show ponto --url        # TURSO_DATABASE_URL (libsql://...)
+   turso db tokens create ponto     # TURSO_AUTH_TOKEN
+   ```
+2. Na Vercel, em **Settings → Environment Variables**, adicione `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` e `APP_PASSWORD` (a senha de acesso; veja abaixo).
+3. Faça um novo deploy. As tabelas são criadas automaticamente na primeira requisição.
+
+### Senha de acesso
+
+Com `APP_PASSWORD` definida, todas as páginas e ações pedem login. A sessão dura 1 ano no navegador, e o ícone de sair fica no topo da página. Trocar a senha encerra todas as sessões abertas. Sem a variável, como no uso local, o app fica aberto.
+
+Opcional: `APP_TIMEZONE` define o fuso usado para "agora". O padrão é `America/Sao_Paulo`, já que o servidor da Vercel roda em UTC.
+
+Para migrar os dados locais para o Turso, faça isto antes de abrir o app em produção, enquanto o banco ainda está vazio: gere o dump com `sqlite3 data/ponto.db .dump > dump.sql` e importe com `turso db shell ponto < dump.sql`.
 
 ## Regras
 
