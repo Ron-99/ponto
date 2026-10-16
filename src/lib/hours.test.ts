@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
+  balanceChart,
+  balanceSeries,
+  balanceTone,
   buildReport,
   closeTime,
   cltAlerts,
@@ -412,5 +415,116 @@ describe("alertas da CLT", () => {
     expect(cltAlerts(days, TUE)).toHaveLength(3);
     expect(days).toEqual(copy);
     expect(alertsOn(TUE, TUE, punches(TUE, "08:00", "12:00", "13:00", "17:00"))).toEqual([]);
+  });
+});
+
+describe("gráfico do saldo", () => {
+  const TODAY = "2026-10-16";
+  const bank = (startDate: string, list: Punch[] = [], minutes = 23 * 60 + 59) =>
+    buildReport({
+      startDate,
+      punches: list,
+      overrides: [],
+      dailyMinutes: 480,
+      now: { date: TODAY, minutes },
+    });
+  const at = (date: string, value: number) => ({ date, value });
+
+  test("série das últimas 8 semanas", () => {
+    const days = bank("2026-07-01");
+    const { points } = balanceSeries(days);
+    expect(points).toHaveLength(56);
+    expect(points[0].date).toBe("2026-08-22");
+    expect(points.at(-1)?.date).toBe(TODAY);
+    const byDate = new Map(days.map((d) => [d.date, d.accumulated]));
+    for (const p of points) expect(p.value).toBe(byDate.get(p.date) as number);
+  });
+
+  test("série começa no início do banco", () => {
+    const { points } = balanceSeries(bank("2026-10-07"));
+    expect(points).toHaveLength(10);
+    expect(points[0].date).toBe("2026-10-07");
+  });
+
+  test("último ponto é o saldo do topo", () => {
+    // Quinta +90; hoje (sexta) com entrada aberta às 08:00 e agora 10:00: balance −360, só o excedente conta.
+    const days = bank(
+      "2026-10-15",
+      [...punches("2026-10-15", "08:00", "12:00", "13:00", "18:30"), ...punches(TODAY, "08:00")],
+      10 * 60,
+    );
+    const today = days.at(-1);
+    expect(today?.balance).toBeLessThan(0);
+    const { points } = balanceSeries(days);
+    expect(points.at(-1)?.value).toBe(90);
+    expect(points.at(-1)?.value).toBe(days.at(-1)?.accumulated as number);
+  });
+
+  test("frase da variação", () => {
+    const trend = (delta: number) =>
+      balanceSeries([
+        { ...bank(TODAY)[0], date: "2026-08-22", accumulated: 100 },
+        { ...bank(TODAY)[0], date: TODAY, accumulated: 100 + delta },
+      ]).trend;
+    expect(trend(270)).toBe("Subiu 04:30 desde 22/08.");
+    expect(trend(-135)).toBe("Caiu 02:15 desde 22/08.");
+    expect(trend(0)).toBe("Igual a 22/08.");
+  });
+
+  test("gráfico sempre mostra o zero", () => {
+    const chart = (...values: number[]) => {
+      const c = balanceChart(values.map((v, i) => at(`2026-10-${String(10 + i)}`, v)));
+      if (c.kind !== "chart") throw new Error("esperava gráfico");
+      return c;
+    };
+    const positive = chart(30, 150, 270);
+    expect(positive.zeroY).toBe(positive.height);
+    const negative = chart(-30, -150, -270);
+    expect(negative.zeroY).toBe(0);
+    const crossing = chart(-60, 120, 270);
+    expect(crossing.zeroY).toBeGreaterThan(0);
+    expect(crossing.zeroY).toBeLessThan(crossing.height);
+    expect(crossing.zeroY).toBeCloseTo((270 / 330) * crossing.height, 6);
+  });
+
+  test("rótulos dos eixos", () => {
+    const c = balanceChart([at("2026-08-22", -60), at("2026-09-01", 0), at(TODAY, 270)]);
+    if (c.kind !== "chart") throw new Error("esperava gráfico");
+    expect(c.labels).toEqual({ top: "+04:30", bottom: "−01:00", start: "22/08", end: "hoje" });
+  });
+
+  test("trechos acima e abaixo do zero", () => {
+    expect(balanceTone(30)).toBe("text-emerald-600 dark:text-emerald-400");
+    expect(balanceTone(-30)).toBe("text-red-600 dark:text-red-400");
+    const c = balanceChart([at("2026-10-12", 60), at("2026-10-13", -60), at("2026-10-14", 30)]);
+    if (c.kind !== "chart") throw new Error("esperava gráfico");
+    expect(c.segments.map((s) => s.tone)).toEqual([
+      balanceTone(1),
+      balanceTone(-1),
+      balanceTone(1),
+    ]);
+    // Cada cruzamento termina um trecho e começa o seguinte exatamente no zero.
+    for (let i = 0; i + 1 < c.segments.length; i++) {
+      const end = c.segments[i].points.at(-1);
+      const start = c.segments[i + 1].points[0];
+      expect(end?.[1]).toBeCloseTo(c.zeroY, 6);
+      expect(start).toEqual(end as [number, number]);
+    }
+  });
+
+  test("gráfico precisa de dois dias", () => {
+    expect(balanceChart([at(TODAY, 30)])).toEqual({
+      kind: "empty",
+      message: "O gráfico aparece a partir do segundo dia do banco.",
+    });
+  });
+
+  test("descrição acessível do gráfico", () => {
+    const base = bank(TODAY)[0];
+    const series = balanceSeries([
+      { ...base, date: "2026-08-22", accumulated: -180 },
+      { ...base, date: TODAY, accumulated: 90 },
+    ]);
+    expect(series.label).toBe("Subiu 04:30 desde 22/08. Saldo de hoje: +01:30.");
   });
 });

@@ -315,3 +315,92 @@ export function cltAlerts(days: DaySummary[], today: string): string[] {
 
 export const needsAttention = (status: DayStatus) =>
   status === "incompleto" || status === "inconsistente";
+
+/** Cor do saldo: verde positivo, vermelho negativo, apagado no zero. */
+export const balanceTone = (minutes: number) =>
+  minutes > 0
+    ? "text-emerald-600 dark:text-emerald-400"
+    : minutes < 0
+      ? "text-red-600 dark:text-red-400"
+      : "text-muted-foreground";
+
+export type BalancePoint = { date: string; value: number };
+
+const CHART_DAYS = 56;
+const shortDate = (date: string) => format(parseISO(date), "dd/MM");
+
+/** Acumulado dos últimos 56 dias (ou desde o início do banco) e a frase da variação. */
+export function balanceSeries(days: ReportDay[]) {
+  const points = days.slice(-CHART_DAYS).map((d) => ({ date: d.date, value: d.accumulated }));
+  const first = points[0];
+  const last = points.at(-1);
+  if (!first || !last || points.length < 2) return { points, trend: null, label: null };
+  const delta = last.value - first.value;
+  const since = shortDate(first.date);
+  const trend =
+    delta > 0
+      ? `Subiu ${formatDuration(delta)} desde ${since}.`
+      : delta < 0
+        ? `Caiu ${formatDuration(delta).slice(1)} desde ${since}.`
+        : `Igual a ${since}.`;
+  return { points, trend, label: `${trend} Saldo de hoje: ${formatDuration(last.value, true)}.` };
+}
+
+type Segment = { tone: string; points: [number, number][] };
+
+export type BalanceChart =
+  | { kind: "empty"; message: string }
+  | {
+      kind: "chart";
+      width: number;
+      height: number;
+      zeroY: number;
+      segments: Segment[];
+      labels: { top: string; bottom: string; start: string; end: string };
+    };
+
+/** Geometria do gráfico num viewBox fixo; a escala vertical sempre inclui o zero. */
+export function balanceChart(points: BalancePoint[], width = 320, height = 120): BalanceChart {
+  if (points.length < 2) {
+    return { kind: "empty", message: "O gráfico aparece a partir do segundo dia do banco." };
+  }
+  const values = points.map((p) => p.value);
+  const max = Math.max(0, ...values);
+  const min = Math.min(0, ...values);
+  const range = max - min || 1;
+  const x = (i: number) => (i / (points.length - 1)) * width;
+  const y = (v: number) => ((max - v) / range) * height;
+  const zeroY = y(0);
+
+  const segments: Segment[] = [];
+  let sign = Math.sign(values.find((v) => v !== 0) ?? 1);
+  let current: [number, number][] = [[x(0), y(values[0])]];
+  for (let i = 1; i < values.length; i++) {
+    const prev = values[i - 1];
+    const v = values[i];
+    if (v !== 0 && Math.sign(v) !== sign) {
+      // Cruza o zero entre os dois pontos: fecha o trecho no cruzamento.
+      const cross: [number, number] = [x(i - 1) + ((x(i) - x(i - 1)) * prev) / (prev - v), zeroY];
+      if (prev !== 0) current.push(cross);
+      segments.push({ tone: balanceTone(sign), points: current });
+      current = [prev !== 0 ? cross : [x(i - 1), zeroY]];
+      sign = Math.sign(v);
+    }
+    current.push([x(i), y(v)]);
+  }
+  segments.push({ tone: balanceTone(sign), points: current });
+
+  return {
+    kind: "chart",
+    width,
+    height,
+    zeroY,
+    segments,
+    labels: {
+      top: formatDuration(max, true),
+      bottom: formatDuration(min, true),
+      start: shortDate(points[0].date),
+      end: "hoje",
+    },
+  };
+}

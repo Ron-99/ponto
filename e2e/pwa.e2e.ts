@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { createClient } from "@libsql/client";
 import type { Subprocess } from "bun";
 
 const PORT = 3999;
@@ -143,6 +144,87 @@ describe("PWA", () => {
       expect(bottom as number).toBeLessThanOrEqual(844);
     } finally {
       browser.kill();
+      await browser.exited;
+    }
+  }, 30_000);
+
+  test("gráfico do saldo cabe em 360px", async () => {
+    process.env.APP_PASSWORD = PASSWORD;
+    const { sessionToken } = await import("../src/lib/auth");
+    // Banco de 10 dias: uma requisição autenticada cria as tabelas, depois o teste grava o início.
+    await fetch(`${BASE}/`, { headers: { cookie: `ponto_session=${sessionToken()}` } });
+    const start = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(
+      new Date(Date.now() - 9 * 24 * 60 * 60 * 1000),
+    );
+    const client = createClient({ url: `file:${path.join(tmp, "e2e.db")}` });
+    await client.execute({
+      sql: "INSERT INTO settings (key, value) VALUES ('start_date', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+      args: [start],
+    });
+    client.close();
+
+    const chrome =
+      process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
+    const browser = Bun.spawn(
+      [
+        chrome,
+        "--headless=new",
+        "--remote-debugging-port=9333",
+        `--user-data-dir=${path.join(tmp, "chrome-grafico")}`,
+        "about:blank",
+      ],
+      { stdout: "ignore", stderr: "ignore" },
+    );
+    try {
+      const chart = await withPage(async (send) => {
+        await send("Emulation.setDeviceMetricsOverride", {
+          width: 360,
+          height: 800,
+          deviceScaleFactor: 3,
+          mobile: true,
+        });
+        await send("Network.setCookie", {
+          name: "ponto_session",
+          value: sessionToken(),
+          url: BASE,
+        });
+        await send("Page.navigate", { url: `${BASE}/` });
+        for (let i = 0; i < 50; i++) {
+          const { result } = await send("Runtime.evaluate", {
+            expression: `(() => {
+                const title = [...document.querySelectorAll("[data-slot=card-title]")]
+                  .find((el) => el.textContent === "Saldo nas últimas 8 semanas");
+                const card = title?.closest("[data-slot=card]");
+                const svg = card?.querySelector("svg[role=img]");
+                if (!svg) return null;
+                return {
+                  label: svg.getAttribute("aria-label"),
+                  svgWidth: svg.getBoundingClientRect().width,
+                  cardWidth: card.getBoundingClientRect().width,
+                  scrollWidth: document.documentElement.scrollWidth,
+                };
+              })()`,
+            returnByValue: true,
+          });
+          if (result.value) {
+            return result.value as {
+              label: string;
+              svgWidth: number;
+              cardWidth: number;
+              scrollWidth: number;
+            };
+          }
+          await Bun.sleep(200);
+        }
+        return null;
+      });
+      expect(chart).not.toBeNull();
+      expect(chart?.label).toMatch(/^(Subiu|Caiu|Igual)/);
+      expect(chart?.scrollWidth).toBeLessThanOrEqual(360);
+      expect(chart?.svgWidth).toBeLessThanOrEqual(chart?.cardWidth ?? 0);
+    } finally {
+      browser.kill();
+      await browser.exited;
     }
   }, 30_000);
 });

@@ -3,6 +3,7 @@ import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 import {
+  balanceTone,
   type DayStatus,
   type DaySummary,
   formatDuration,
@@ -18,15 +19,7 @@ export const formatDate = (date: string, pattern = "dd/MM/yyyy") => {
 
 export function Balance({ minutes, className }: { minutes: number; className?: string }) {
   return (
-    <span
-      className={cn(
-        "font-mono tabular-nums",
-        minutes > 0 && "text-emerald-600 dark:text-emerald-400",
-        minutes < 0 && "text-red-600 dark:text-red-400",
-        minutes === 0 && "text-muted-foreground",
-        className,
-      )}
-    >
+    <span className={cn("font-mono tabular-nums", balanceTone(minutes), className)}>
       {formatDuration(minutes, true)}
     </span>
   );

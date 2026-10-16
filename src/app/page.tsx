@@ -2,6 +2,7 @@ import { AlertTriangleIcon } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { BalanceChart } from "@/components/balance-chart";
 import { ClockButton } from "@/components/clock-button";
 import { DayDialog } from "@/components/day-dialog";
 import { Balance, formatDate, PunchChips, StatusBadge } from "@/components/format";
@@ -9,6 +10,7 @@ import { ManualPunchDialog } from "@/components/manual-punch-dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { loadBank } from "@/lib/data";
 import {
+  balanceSeries,
   closeTime,
   cltAlerts,
   formatDuration,
@@ -50,6 +52,7 @@ async function Dashboard() {
   const weekBalance = week.reduce((s, d) => s + d.bankDelta, 0);
   const attention = days.filter((d) => !d.isToday && needsAttention(d.status));
   const alerts = cltAlerts(days, now.date);
+  const series = balanceSeries(days);
 
   return (
     <div className="grid gap-6">
@@ -195,6 +198,16 @@ async function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Saldo nas últimas 8 semanas</CardTitle>
+          {series.trend && <CardDescription>{series.trend}</CardDescription>}
+        </CardHeader>
+        <CardContent>
+          <BalanceChart points={series.points} label={series.label} />
+        </CardContent>
+      </Card>
     </div>
   );
 }
