@@ -491,6 +491,9 @@ describe("gráfico do saldo", () => {
     const c = balanceChart([at("2026-08-22", -60), at("2026-09-01", 0), at(TODAY, 270)]);
     if (c.kind !== "chart") throw new Error("esperava gráfico");
     expect(c.labels).toEqual({ top: "+04:30", bottom: "−01:00", start: "22/08", end: "hoje" });
+    const positive = balanceChart([at("2026-08-22", 30), at(TODAY, 270)]);
+    if (positive.kind !== "chart") throw new Error("esperava gráfico");
+    expect(positive.labels).toMatchObject({ top: "+04:30", bottom: "00:00" });
   });
 
   test("trechos acima e abaixo do zero", () => {

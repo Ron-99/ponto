@@ -65,7 +65,7 @@ None - nothing consumed outside
 **Acceptance Criteria**
 
 5. WHEN a série tem 2 ou mais pontos THEN the system SHALL mostrar no painel o card "Saldo nas últimas 8 semanas" com uma linha do acumulado e uma linha de referência no zero
-6. The system SHALL mostrar no eixo vertical o maior e o menor valor da série em `HH:MM` com sinal, e no eixo horizontal a data do primeiro ponto e "hoje"
+6. The system SHALL mostrar no eixo vertical os limites da escala em `HH:MM` com sinal (o maior valor da série ou zero, no topo, e o menor valor ou zero, na base), e no eixo horizontal a data do primeiro ponto e "hoje"
 7. The system SHALL desenhar o trecho acima do zero com a cor de saldo positivo e o trecho abaixo com a cor de saldo negativo, as mesmas do componente `Balance`
 8. IF a série tem menos de 2 pontos THEN the system SHALL mostrar no card "O gráfico aparece a partir do segundo dia do banco." no lugar do gráfico
 9. The system SHALL dar ao SVG `role="img"` e um `aria-label` com a frase da variação e o saldo de hoje, para leitor de tela

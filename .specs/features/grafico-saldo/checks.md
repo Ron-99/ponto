@@ -32,7 +32,7 @@ Proof: `bun test --conditions react-server src/lib/hours.test.ts -t "frase da va
 - [x] **C5** - A escala vertical sempre inclui o zero, e a geometria traz uma linha de referência nele. Uma série toda positiva (+30 a +270) põe o zero na base, uma toda negativa põe no topo, e uma que cruza põe no meio. (AC 5)
 Proof: `bun test --conditions react-server src/lib/hours.test.ts -t "gráfico sempre mostra o zero"`
 
-- [x] **C6** - Para uma série de −60 a +270 que começa em 22/08, os rótulos são `+04:30` no topo, `−01:00` na base, `22/08` à esquerda e `hoje` à direita (AC 6)
+- [x] **C6** - Para uma série de −60 a +270 que começa em 22/08, os rótulos são `+04:30` no topo, `−01:00` na base, `22/08` à esquerda e `hoje` à direita. Numa série toda positiva, de +30 a +270, a base é `00:00`, o limite da escala, e não `+00:30` (AC 6)
 Proof: `bun test --conditions react-server src/lib/hours.test.ts -t "rótulos dos eixos"`
 
 - [x] **C7** - Uma série que cruza o zero vira trechos com sinal: o trecho acima do zero usa a mesma classe de cor do saldo positivo de `Balance` (`text-emerald-600 dark:text-emerald-400`), e o abaixo, a do negativo (`text-red-600 dark:text-red-400`). O ponto de cruzamento fica exatamente no zero. `Balance` e o gráfico usam a mesma função de cor. (AC 7)
@@ -80,3 +80,5 @@ Proof: `git diff --exit-code 821eac4 -- package.json bun.lock`
 ## Handoff
 
 - S1-S2 ≈ 10k tokens (≈ 40 KB: `hours.ts` 9 KB, `hours.test.ts` 9 KB, `page.tsx` 8 KB, `format.tsx` 3 KB, `e2e/pwa.e2e.ts` 7 KB, mais ≈ 4 KB novos no componente, ÷ 4), abaixo do budget de 150k - one builder
+
+- **Settled mid-build:** rótulos do eixo vertical são os limites da escala, que sempre inclui o zero, e não o mínimo e o máximo da série. Decidido pelo usuário em 2026-10-16, depois da verificação do round 1 (lacuna 1). AC 6 e C6 foram ajustados, e C6 ganhou o caso de série toda positiva.
