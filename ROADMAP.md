@@ -30,7 +30,7 @@ Ideias de melhoria, ordenadas pelo quanto ajudam no objetivo principal: saber co
 
 ## Depende da regra da empresa
 
-- [ ] **Prazo de compensação do banco**
+- [x] **Prazo de compensação do banco**
   - Muitas empresas zeram ou pagam o banco a cada 4 meses.
   - Mostrar quanto vence e quando.
 - [ ] **Lembrete de saída**

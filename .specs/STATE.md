@@ -12,6 +12,6 @@
 ## Handoff
 
 **Feature**: nenhuma em andamento
-**Where**: exportar-csv, alertas-clt, grafico-saldo e jornada-semanal verificados (PASS) em 2026-10-16, de `3311983` a `84a0157`. Nada foi enviado nem publicado: falta `git push` e deploy, e a migração 2 roda no Turso na primeira requisição depois do deploy.
+**Where**: exportar-csv, alertas-clt, grafico-saldo e jornada-semanal verificados (PASS) em 2026-10-16, de `3311983` a `84a0157`. prazo-compensacao verificado (PASS) em 2026-10-16, de `78b3f53` a `e7a8237`. Nada foi enviado nem publicado: falta `git push` e deploy, e as migrações 2 e 3 rodam no Turso na primeira requisição depois do deploy.
 **Next step**: deploy, com aprovação do usuário. Depois, o próximo item do `ROADMAP.md`.
 **Blockers**: none
