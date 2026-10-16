@@ -8,12 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAction } from "@/components/use-action";
 
-export function SettingsForm(props: {
-  dailyHours: string;
-  startDate: string;
-  firstPunch: string | null;
-}) {
-  const [dailyHours, setDailyHours] = useState(props.dailyHours);
+export function SettingsForm(props: { startDate: string; firstPunch: string | null }) {
   const [startDate, setStartDate] = useState(props.startDate);
   const { pending, run } = useAction();
 
@@ -22,20 +17,9 @@ export function SettingsForm(props: {
       className="grid gap-4"
       onSubmit={(e) => {
         e.preventDefault();
-        run(() => updateSettings({ dailyHours, startDate }));
+        run(() => updateSettings({ startDate }));
       }}
     >
-      <div className="grid gap-1.5">
-        <Label htmlFor="daily">Jornada diária (HH:MM)</Label>
-        <Input
-          id="daily"
-          className="w-32"
-          required
-          pattern="\d{1,2}:[0-5]\d"
-          value={dailyHours}
-          onChange={(e) => setDailyHours(e.target.value)}
-        />
-      </div>
       <div className="grid gap-1.5">
         <Label htmlFor="start">Início do banco de horas</Label>
         <Input

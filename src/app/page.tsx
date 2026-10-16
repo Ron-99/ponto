@@ -14,8 +14,10 @@ import {
   closeTime,
   cltAlerts,
   formatDuration,
+  jornadaFor,
   needsAttention,
   nextPunchType,
+  remainingWeekTarget,
   summarizeDay,
   targetDescription,
   toTime,
@@ -32,10 +34,10 @@ export default function Page() {
 }
 
 async function Dashboard() {
-  const { now, days, total, settings } = await loadBank();
+  const { now, days, total, schedules } = await loadBank();
   const today =
     days.find((d) => d.date === now.date) ??
-    summarizeDay(now.date, [], null, settings.dailyMinutes, now);
+    summarizeDay(now.date, [], null, jornadaFor(now.date, schedules), now);
 
   const remaining = Math.max(0, today.target - today.worked);
   const open = today.status === "em-andamento";
@@ -45,10 +47,9 @@ async function Dashboard() {
 
   const week = days.filter((d) => weekKey(d.date) === weekKey(now.date));
   const weekWorked = week.reduce((s, d) => s + d.worked, 0);
-  // Dias úteis ainda por vir nesta semana também entram na meta semanal.
-  const futureWeekdays = today.weekday >= 1 && today.weekday <= 5 ? 5 - today.weekday : 0;
+  // A jornada dos dias ainda por vir nesta semana também entra na meta semanal.
   const weekTarget =
-    week.reduce((s, d) => s + d.target, 0) + futureWeekdays * settings.dailyMinutes;
+    week.reduce((s, d) => s + d.target, 0) + remainingWeekTarget(now.date, schedules);
   const weekBalance = week.reduce((s, d) => s + d.bankDelta, 0);
   const attention = days.filter((d) => !d.isToday && needsAttention(d.status));
   const alerts = cltAlerts(days, now.date);

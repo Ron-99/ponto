@@ -1,17 +1,21 @@
 "use server";
 
-import { isWeekend, parseISO } from "date-fns";
+import { format, isValid, isWeekend, parseISO } from "date-fns";
 import { refresh } from "next/cache";
 import { cookies } from "next/headers";
 import { isValidSession, SESSION_COOKIE } from "@/lib/auth";
 import { currentNow } from "@/lib/data";
 import * as db from "@/lib/db";
 import {
+  DAY_NAMES,
+  FORM_DAYS,
   formatDuration,
+  jornadaFor,
   nextPunchType,
   OVERRIDE_LABELS,
   type OverrideKind,
   type PunchType,
+  SINCE_START,
   toTime,
   validateSequence,
 } from "@/lib/hours";
@@ -125,12 +129,19 @@ export async function setDayOverride(
     const match = /^(\d{2}):([0-5]\d)$/.exec(hours);
     minutes = match ? Number(match[1]) * 60 + Number(match[2]) : 0;
     if (!minutes) return { ok: false, error: "Horas abonadas devem estar no formato HH:MM." };
-    if (isWeekend(parseISO(date))) return { ok: false, error: "Fim de semana já tem meta de 0h." };
-    const { dailyMinutes } = await db.getSettings();
-    if (minutes >= dailyMinutes) {
+    const dayMinutes = jornadaFor(date, await db.listSchedules());
+    if (dayMinutes === 0) {
       return {
         ok: false,
-        error: `Abono parcial deve ser menor que a jornada de ${formatDuration(dailyMinutes)}. Para o dia todo, deixe as horas em branco.`,
+        error: isWeekend(parseISO(date))
+          ? "Fim de semana já tem meta de 0h."
+          : "Este dia não tem jornada, a meta já é 0h.",
+      };
+    }
+    if (minutes >= dayMinutes) {
+      return {
+        ok: false,
+        error: `Abono parcial deve ser menor que a jornada de ${formatDuration(dayMinutes)}. Para o dia todo, deixe as horas em branco.`,
       };
     }
   }
@@ -148,21 +159,64 @@ export async function setDayOverride(
   return { ok: true, message: `Dia marcado como ${OVERRIDE_LABELS[kind].toLowerCase()}.` };
 }
 
-export async function updateSettings(input: {
-  dailyHours: string;
-  startDate: string;
-}): Promise<ActionResult> {
+export async function updateSettings(input: { startDate: string }): Promise<ActionResult> {
   if (!(await authorized())) return UNAUTHORIZED;
-  const match = /^(\d{1,2}):([0-5]\d)$/.exec(input.dailyHours);
-  if (!match) return { ok: false, error: "Jornada deve estar no formato HH:MM." };
-  const dailyMinutes = Number(match[1]) * 60 + Number(match[2]);
-  if (dailyMinutes <= 0 || dailyMinutes > 24 * 60) {
-    return { ok: false, error: "Jornada inválida." };
-  }
   if (input.startDate && !DATE_RE.test(input.startDate)) {
     return { ok: false, error: "Data de início inválida." };
   }
-  await db.saveSettings({ dailyMinutes, startDate: input.startDate || null });
+  await db.saveSettings({ startDate: input.startDate || null });
   refresh();
   return { ok: true, message: "Configurações salvas." };
+}
+
+const dateLabel = (date: string) => format(parseISO(date), "dd/MM/yyyy");
+
+/**
+ * Salva a jornada de cada dia (`hours[0]` = domingo, HH:MM) a partir de `validFrom`.
+ * Data vazia substitui a jornada "desde o início"; a mesma data substitui a anterior.
+ */
+export async function saveSchedule(input: {
+  validFrom: string;
+  hours: string[];
+}): Promise<ActionResult> {
+  if (!(await authorized())) return UNAUTHORIZED;
+  const validFrom = input.validFrom || SINCE_START;
+  if (!DATE_RE.test(validFrom) || !isValid(parseISO(validFrom))) {
+    return { ok: false, error: "Data inválida." };
+  }
+  const minutes: number[] = [];
+  for (const day of FORM_DAYS) {
+    const match = /^(\d{1,2}):([0-5]\d)$/.exec(input.hours[day] ?? "");
+    const value = match ? Number(match[1]) * 60 + Number(match[2]) : -1;
+    if (value < 0 || value > 24 * 60) {
+      return {
+        ok: false,
+        error: `Jornada de ${DAY_NAMES[day]} deve estar no formato HH:MM, até 24:00.`,
+      };
+    }
+    minutes[day] = value;
+  }
+  if (minutes.every((m) => m === 0)) {
+    return { ok: false, error: "Informe a jornada de pelo menos um dia." };
+  }
+  await db.saveSchedule({ validFrom, minutes });
+  refresh();
+  return {
+    ok: true,
+    message:
+      validFrom === SINCE_START
+        ? "Jornada desde o início salva."
+        : `Jornada salva a partir de ${dateLabel(validFrom)}.`,
+  };
+}
+
+export async function removeSchedule(validFrom: string): Promise<ActionResult> {
+  if (!(await authorized())) return UNAUTHORIZED;
+  if (validFrom === SINCE_START) {
+    return { ok: false, error: "A jornada desde o início não pode ser removida." };
+  }
+  if (!DATE_RE.test(validFrom)) return { ok: false, error: "Data inválida." };
+  await db.deleteSchedule(validFrom);
+  refresh();
+  return { ok: true, message: `Jornada de ${dateLabel(validFrom)} removida.` };
 }

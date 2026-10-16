@@ -31,95 +31,95 @@ recebe nenhum batch. C28 prende essa regra.
 
 ### S1 - Meta do dia pela jornada em vigor · 4 files · 30 KB · ~8k
 
-- [ ] **C1** - Com a semana `[0, 540, 540, 540, 540, 240, 0]`, a meta é 540 na segunda 2026-10-12 e 240 na sexta 2026-10-16 (AC 1)
+- [x] **C1** - Com a semana `[0, 540, 540, 540, 540, 240, 0]`, a meta é 540 na segunda 2026-10-12 e 240 na sexta 2026-10-16 (AC 1)
 Proof: `bun test --conditions react-server src/lib/hours.test.ts -t "meta pela jornada do dia da semana"`
 
-- [ ] **C2** - Com 240 no sábado, o sábado passado 2026-10-10 sem batidas tem `target` 240, status `falta` e `bankDelta` −240 (AC 2)
+- [x] **C2** - Com 240 no sábado, o sábado passado 2026-10-10 sem batidas tem `target` 240, status `falta` e `bankDelta` −240 (AC 2)
 Proof: `bun test --conditions react-server src/lib/hours.test.ts -t "sábado com jornada sem batidas é falta"`
 
-- [ ] **C3** - Num dia com jornada 0 e sem batidas, o status é `folga-semanal`. O rótulo do badge é "Fim de semana" no sábado e no domingo, e "Sem jornada" numa quarta com jornada 0. `StatusBadge` usa a mesma função de rótulo. (AC 3)
+- [x] **C3** - Num dia com jornada 0 e sem batidas, o status é `folga-semanal`. O rótulo do badge é "Fim de semana" no sábado e no domingo, e "Sem jornada" numa quarta com jornada 0. `StatusBadge` usa a mesma função de rótulo. (AC 3)
 Proof: `bun test --conditions react-server src/lib/hours.test.ts -t "dia sem jornada"`
 
-- [ ] **C4** - Com as jornadas `0000-01-01` padrão e `2026-10-19` `[0, 540, 540, 540, 540, 240, 0]`, `buildReport` de 2026-10-12 a 2026-10-23 dá `target` 480 em 2026-10-16 e 240 em 2026-10-23 (AC 4)
+- [x] **C4** - Com as jornadas `0000-01-01` padrão e `2026-10-19` `[0, 540, 540, 540, 540, 240, 0]`, `buildReport` de 2026-10-12 a 2026-10-23 dá `target` 480 em 2026-10-16 e 240 em 2026-10-23 (AC 4)
 Proof: `bun test --conditions react-server src/lib/hours.test.ts -t "vigência não muda os dias anteriores"`
 
-- [ ] **C5** - Com jornadas em `0000-01-01`, `2026-10-19` e `2026-11-02`, recebidas fora de ordem, a jornada escolhida é a de `0000-01-01` em 2026-10-18, a de `2026-10-19` em 2026-10-19 e em 2026-11-01, e a de `2026-11-02` em 2026-11-02 (AC 5)
+- [x] **C5** - Com jornadas em `0000-01-01`, `2026-10-19` e `2026-11-02`, recebidas fora de ordem, a jornada escolhida é a de `0000-01-01` em 2026-10-18, a de `2026-10-19` em 2026-10-19 e em 2026-11-01, e a de `2026-11-02` em 2026-11-02 (AC 5)
 Proof: `bun test --conditions react-server src/lib/hours.test.ts -t "jornada em vigor na data"`
 
-- [ ] **C6** - Numa quarta, 2026-10-14, com 540 na quinta e 240 na sexta, os dias que faltam somam 780 na meta da "Semana atual". Se uma jornada nova com 0 na sexta começa em 2026-10-16, a soma é 540. (AC 6)
+- [x] **C6** - Numa quarta, 2026-10-14, com 540 na quinta e 240 na sexta, os dias que faltam somam 780 na meta da "Semana atual". Se uma jornada nova com 0 na sexta começa em 2026-10-16, a soma é 540. (AC 6)
 Proof: `bun test --conditions react-server src/lib/hours.test.ts -t "meta dos dias que faltam na semana"`
 
-- [ ] **C7** - Numa sexta com jornada 240, abono de dia inteiro dá meta 0, e abono parcial de 60 dá meta 180 (AC 7)
+- [x] **C7** - Numa sexta com jornada 240, abono de dia inteiro dá meta 0, e abono parcial de 60 dá meta 180 (AC 7)
 Proof: `bun test --conditions react-server src/lib/hours.test.ts -t "abono usa a jornada do dia"`
 
 ### S2 - Cadastrar e remover jornadas · 5 files · 22 KB · ~6k
 
-- [ ] **C8** - A lista de Configurações para as jornadas `0000-01-01` e `2026-10-19` vem nesta ordem: `2026-10-19` com rótulo "A partir de 19/10/2026" e total `40:00`, depois "Desde o início" com total `40:00`. Cada uma traz os 7 dias em `HH:MM`, de segunda a domingo. (AC 8)
+- [x] **C8** - A lista de Configurações para as jornadas `0000-01-01` e `2026-10-19` vem nesta ordem: `2026-10-19` com rótulo "A partir de 19/10/2026" e total `40:00`, depois "Desde o início" com total `40:00`. Cada uma traz os 7 dias em `HH:MM`, de segunda a domingo. (AC 8)
 Proof: `bun test --conditions react-server src/lib/hours.test.ts -t "lista de jornadas"`
 
-- [ ] **C9** - `saveSchedule` com data `2026-10-19` e os 7 campos grava a linha `2026-10-19` com esses minutos e responde "Jornada salva a partir de 19/10/2026." (AC 9)
+- [x] **C9** - `saveSchedule` com data `2026-10-19` e os 7 campos grava a linha `2026-10-19` com esses minutos e responde "Jornada salva a partir de 19/10/2026." (AC 9)
 Proof: `bun test --conditions react-server src/app/actions.test.ts -t "salva jornada com data de início"`
 
-- [ ] **C10** - Com a data vazia, a linha `0000-01-01` recebe os minutos novos, nenhuma linha é criada, e a resposta é "Jornada desde o início salva." (AC 10)
+- [x] **C10** - Com a data vazia, a linha `0000-01-01` recebe os minutos novos, nenhuma linha é criada, e a resposta é "Jornada desde o início salva." (AC 10)
 Proof: `bun test --conditions react-server src/app/actions.test.ts -t "data vazia substitui desde o início"`
 
-- [ ] **C11** - Salvar duas vezes com a data `2026-10-19` deixa uma linha só, com os valores da segunda vez (AC 11)
+- [x] **C11** - Salvar duas vezes com a data `2026-10-19` deixa uma linha só, com os valores da segunda vez (AC 11)
 Proof: `bun test --conditions react-server src/app/actions.test.ts -t "mesma data substitui"`
 
-- [ ] **C12** - `9:0` na segunda é recusado com "Jornada de segunda deve estar no formato HH:MM, até 24:00.", e `24:01` no sábado com "Jornada de sábado deve estar no formato HH:MM, até 24:00.". `24:00` é aceito. A data `2026-13-01` é recusada com "Data inválida.". Nada é gravado nos casos recusados. (AC 12)
+- [x] **C12** - `9:0` na segunda é recusado com "Jornada de segunda deve estar no formato HH:MM, até 24:00.", e `24:01` no sábado com "Jornada de sábado deve estar no formato HH:MM, até 24:00.". `24:00` é aceito. A data `2026-13-01` é recusada com "Data inválida.". Nada é gravado nos casos recusados. (AC 12)
 Proof: `bun test --conditions react-server src/app/actions.test.ts -t "recusa jornada inválida"`
 
-- [ ] **C13** - Os 7 campos em `00:00` são recusados com "Informe a jornada de pelo menos um dia." e nada é gravado (AC 13)
+- [x] **C13** - Os 7 campos em `00:00` são recusados com "Informe a jornada de pelo menos um dia." e nada é gravado (AC 13)
 Proof: `bun test --conditions react-server src/app/actions.test.ts -t "recusa semana sem jornada"`
 
-- [ ] **C14** - Remover `2026-10-19` apaga a linha e responde "Jornada de 19/10/2026 removida.", e a sexta 2026-10-23 volta a ter meta 480 (AC 14)
+- [x] **C14** - Remover `2026-10-19` apaga a linha e responde "Jornada de 19/10/2026 removida.", e a sexta 2026-10-23 volta a ter meta 480 (AC 14)
 Proof: `bun test --conditions react-server src/app/actions.test.ts -t "remove jornada"`
 
-- [ ] **C15** - Remover `0000-01-01` é recusado com "A jornada desde o início não pode ser removida.", e a linha continua no banco (AC 15)
+- [x] **C15** - Remover `0000-01-01` é recusado com "A jornada desde o início não pode ser removida.", e a linha continua no banco (AC 15)
 Proof: `bun test --conditions react-server src/app/actions.test.ts -t "não remove desde o início"`
 
-- [ ] **C16** - Com hoje 2026-10-16 e as jornadas `0000-01-01` padrão e `2026-10-19`, os valores iniciais do formulário são os da padrão (`08:00` de segunda a sexta, `00:00` no sábado e no domingo), e a data é `2026-10-16` (AC 16)
+- [x] **C16** - Com hoje 2026-10-16 e as jornadas `0000-01-01` padrão e `2026-10-19`, os valores iniciais do formulário são os da padrão (`08:00` de segunda a sexta, `00:00` no sábado e no domingo), e a data é `2026-10-16` (AC 16)
 Proof: `bun test --conditions react-server src/lib/hours.test.ts -t "formulário começa com a jornada em vigor hoje"`
 
-- [ ] **C17** - Sem sessão (com `APP_PASSWORD` definida), `saveSchedule` e `removeSchedule` respondem `UNAUTHORIZED` e não gravam nada (Observable: unauthorised)
+- [x] **C17** - Sem sessão (com `APP_PASSWORD` definida), `saveSchedule` e `removeSchedule` respondem `UNAUTHORIZED` e não gravam nada (Observable: unauthorised)
 Proof: `bun test --conditions react-server src/app/actions.test.ts -t "jornada exige sessão"`
 
 ### S3 - Abono parcial com a jornada do dia · 2 files · 9 KB · ~3k
 
-- [ ] **C18** - Com 240 na sexta, `setDayOverride(<sexta>, "folga", "04:00")` é recusado com "Abono parcial deve ser menor que a jornada de 04:00. Para o dia todo, deixe as horas em branco." (AC 17)
+- [x] **C18** - Com 240 na sexta, `setDayOverride(<sexta>, "folga", "04:00")` é recusado com "Abono parcial deve ser menor que a jornada de 04:00. Para o dia todo, deixe as horas em branco." (AC 17)
 Proof: `bun test --conditions react-server src/app/actions.test.ts -t "abono parcial usa a jornada do dia"`
 
-- [ ] **C19** - Num sábado com jornada 0, `"02:00"` continua recusado com "Fim de semana já tem meta de 0h." (AC 18)
+- [x] **C19** - Num sábado com jornada 0, `"02:00"` continua recusado com "Fim de semana já tem meta de 0h." (AC 18)
 Proof: `bun test --conditions react-server src/app/actions.test.ts -t "recusa abono parcial no fim de semana"`
 
-- [ ] **C20** - Numa quarta com jornada 0, `"02:00"` é recusado com "Este dia não tem jornada, a meta já é 0h." e nada é gravado (AC 19)
+- [x] **C20** - Numa quarta com jornada 0, `"02:00"` é recusado com "Este dia não tem jornada, a meta já é 0h." e nada é gravado (AC 19)
 Proof: `bun test --conditions react-server src/app/actions.test.ts -t "recusa abono parcial em dia sem jornada"`
 
-- [ ] **C21** - Num sábado com jornada 240, `"01:00"` grava `minutes` 60, e a meta do dia no `buildReport` é 180 (AC 20)
+- [x] **C21** - Num sábado com jornada 240, `"01:00"` grava `minutes` 60, e a meta do dia no `buildReport` é 180 (AC 20)
 Proof: `bun test --conditions react-server src/app/actions.test.ts -t "abono parcial no sábado com jornada"`
 
 ### S4 - Migração do banco existente · 2 files · 13 KB · ~3k
 
-- [ ] **C22** - Num banco em `schema_version` 1 com `daily_minutes` = 450, a primeira consulta cria `work_schedules` com uma linha só, `0000-01-01`, e `d0..d6` = `0, 450, 450, 450, 450, 450, 0`, e grava `schema_version` = 2 (AC 21)
+- [x] **C22** - Num banco em `schema_version` 1 com `daily_minutes` = 450, a primeira consulta cria `work_schedules` com uma linha só, `0000-01-01`, e `d0..d6` = `0, 450, 450, 450, 450, 450, 0`, e grava `schema_version` = 2 (AC 21)
 Proof: `bun test --conditions react-server src/lib/db.test.ts -t "migração 2 copia a jornada atual"`
 
-- [ ] **C23** - Sem `daily_minutes` em `settings`, a linha `0000-01-01` sai com 480 de segunda a sexta (AC 22)
+- [x] **C23** - Sem `daily_minutes` em `settings`, a linha `0000-01-01` sai com 480 de segunda a sexta (AC 22)
 Proof: `bun test --conditions react-server src/lib/db.test.ts -t "migração 2 sem jornada usa 8h"`
 
-- [ ] **C24** - Num banco antigo com abonos, batidas e `daily_minutes` = 450, o acumulado de `buildReport` com a jornada única de antes é igual ao acumulado com as jornadas lidas depois da migração (AC 23)
+- [x] **C24** - Num banco antigo com abonos, batidas e `daily_minutes` = 450, o acumulado de `buildReport` com a jornada única de antes é igual ao acumulado com as jornadas lidas depois da migração (AC 23)
 Proof: `bun test --conditions react-server src/lib/db.test.ts -t "migração 2 preserva o saldo"`
 
-- [ ] **C25** - Um banco sem `schema_version` aplica as migrações 1 e 2 na mesma conexão: a coluna `minutes` existe, `work_schedules` tem a linha `0000-01-01`, e `schema_version` = 2 (AC 21, encadeamento)
+- [x] **C25** - Um banco sem `schema_version` aplica as migrações 1 e 2 na mesma conexão: a coluna `minutes` existe, `work_schedules` tem a linha `0000-01-01`, e `schema_version` = 2 (AC 21, encadeamento)
 Proof: `bun test --conditions react-server src/lib/db.test.ts -t "migra banco sem versão"`
 
-- [ ] **C26** - Se outra instância aplica a migração 2 entre a leitura da versão e o batch, o batch falha, a conexão segue, e `work_schedules` tem uma linha só. Se o batch da migração 2 falha e `schema_version` continua 1, o erro é propagado e nenhuma linha fica em `work_schedules`. (AC 24)
+- [x] **C26** - Se outra instância aplica a migração 2 entre a leitura da versão e o batch, o batch falha, a conexão segue, e `work_schedules` tem uma linha só. Se o batch da migração 2 falha e `schema_version` continua 1, o erro é propagado e nenhuma linha fica em `work_schedules`. (AC 24)
 Proof: `bun test --conditions react-server src/lib/db.test.ts -t "migração 2 concorrente segue"`
 Proof: `bun test --conditions react-server src/lib/db.test.ts -t "falha da migração 2 propaga"`
 
-- [ ] **C27** - Num banco já em `schema_version` 2, uma conexão nova não envia nenhum batch (contado por proxy, lição L-001) (AC 21, idempotência)
+- [x] **C27** - Num banco já em `schema_version` 2, uma conexão nova não envia nenhum batch (contado por proxy, lição L-001) (AC 21, idempotência)
 Proof: `bun test --conditions react-server src/lib/db.test.ts -t "migração não roda duas vezes"`
 
-- [ ] **C28** - Nenhuma asserção existente é removida ou enfraquecida. Em `git diff 821eac4 -- src/lib/hours.test.ts src/app/actions.test.ts src/lib/db.test.ts`, as únicas linhas `-` com `expect(` são as três `expect(await version(client)).toBe("1");` de `db.test.ts`, cada uma trocada por `toBe("2")` (regra 3)
+- [x] **C28** - Nenhuma asserção existente é removida ou enfraquecida. Em `git diff 821eac4 -- src/lib/hours.test.ts src/app/actions.test.ts src/lib/db.test.ts`, as únicas linhas `-` com `expect(` são as três `expect(await version(client)).toBe("1");` de `db.test.ts`, cada uma trocada por `toBe("2")` (regra 3)
 Proof: `git diff 821eac4 -- src/lib/hours.test.ts src/app/actions.test.ts src/lib/db.test.ts | grep -E '^-[^-].*expect\(' | grep -vc 'toBe("1")'` imprime `0`, e `git diff 821eac4 -- src/lib/db.test.ts | grep -c '^-.*toBe("1")'` imprime `3`
 
 ## Coverage
@@ -156,3 +156,5 @@ Proof: `git diff 821eac4 -- src/lib/hours.test.ts src/app/actions.test.ts src/li
 ## Handoff
 
 - S1-S4 ≈ 19k tokens (≈ 75 KB: `hours.ts` 9 KB, `hours.test.ts` 9 KB, `db.ts` 7 KB, `db.test.ts` 6 KB, `data.ts` 2 KB, `actions.ts` 6 KB, `actions.test.ts` 3 KB, `page.tsx` 8 KB, `config/page.tsx` 1 KB, `settings-form.tsx` 2 KB, `format.tsx` 3 KB, `README.md` 4 KB, mais ≈ 15 KB de código e testes novos, ÷ 4), abaixo do budget de 150k - one builder
+
+- **Settled mid-build:** `targetFor` manteve o parâmetro de data (renomeado para `_date`, sem uso) para que nenhuma linha `expect(targetFor(...))` mudasse (C28). Em `src/lib/csv.test.ts` ("status igual ao badge"), o caso `folga-semanal` passou a usar um sábado, porque numa segunda o rótulo agora é "Sem jornada" (AC 3). O valor esperado, "Fim de semana", não mudou.

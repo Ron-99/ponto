@@ -66,7 +66,7 @@ const synced = async (year: number) => (await db.syncedHolidayYears()).includes(
 
 describe("importação de feriados", () => {
   test("carregar o banco importa os feriados dos anos do banco", async () => {
-    await db.saveSettings({ dailyMinutes: 480, startDate: "2025-06-01" });
+    await db.saveSettings({ startDate: "2025-06-01" });
     fakeApi({
       "2025": [{ date: "2025-12-25", name: "Natal", type: "national" }],
       "2026": [TIRADENTES],
@@ -230,7 +230,7 @@ describe("falhas da BrasilAPI", () => {
   test("carregar o banco funciona com a API fora", async () => {
     const logged = spyOn(console, "error").mockImplementation(() => {});
     try {
-      await db.saveSettings({ dailyMinutes: 480, startDate: "2026-10-12" });
+      await db.saveSettings({ startDate: "2026-10-12" });
       await db.setOverride("2026-10-12", "feriado", "Aparecida");
       fakeApi({ "2026": async () => new Response("erro", { status: 500 }) });
       const { days } = await loadBank();

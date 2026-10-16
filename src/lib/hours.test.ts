@@ -14,10 +14,16 @@ import {
   overrideTitle,
   type Punch,
   partialOverrideLabel,
+  remainingWeekTarget,
+  SINCE_START,
+  scheduleFormDefaults,
+  scheduleRows,
+  statusLabel,
   summarizeDay,
   targetDescription,
   targetFor,
   validateSequence,
+  type WorkSchedule,
 } from "./hours";
 
 let nextId = 1;
@@ -37,6 +43,10 @@ const WED = "2026-10-14";
 const SAT = "2026-10-17";
 // "Agora" num dia futuro: todos os dias testados já estão encerrados.
 const past = { date: "2099-01-01", minutes: 0 };
+// Jornada padrão: 08:00 de segunda a sexta, desde o início.
+const STANDARD: WorkSchedule[] = [
+  { validFrom: SINCE_START, minutes: [0, 480, 480, 480, 480, 480, 0] },
+];
 
 describe("validateSequence", () => {
   test("aceita alternância começando por entrada", () => {
@@ -130,7 +140,7 @@ describe("summarizeDay", () => {
   });
 
   test("trabalho no fim de semana é todo extra", () => {
-    const d = summarizeDay(SAT, punches(SAT, "09:00", "11:00"), null, 480, past);
+    const d = summarizeDay(SAT, punches(SAT, "09:00", "11:00"), null, 0, past);
     expect(d.target).toBe(0);
     expect(d.balance).toBe(120);
   });
@@ -155,7 +165,7 @@ describe("buildReport", () => {
         ...punches(TUE, "08:00", "12:00", "13:00", "16:30"), // -30
       ],
       overrides: [{ date: WED, kind: "folga", note: null }],
-      dailyMinutes: 480,
+      schedules: STANDARD,
       now: { date: WED, minutes: 10 * 60 },
     });
     expect(days.map((d) => d.accumulated)).toEqual([60, 30, 30]);
@@ -171,7 +181,7 @@ describe("buildReport", () => {
         startDate: "2030-01-01",
         punches: [],
         overrides: [],
-        dailyMinutes: 480,
+        schedules: STANDARD,
         now: { date: MON, minutes: 0 },
       }),
     ).toEqual([]);
@@ -286,7 +296,7 @@ describe("alertas da CLT", () => {
     now: { date: string; minutes: number } = endOf(today),
   ) =>
     cltAlerts(
-      buildReport({ startDate, punches: list, overrides: [], dailyMinutes: 480, now }),
+      buildReport({ startDate, punches: list, overrides: [], schedules: STANDARD, now }),
       today,
     );
   const typed = (date: string, ...items: [string, "in" | "out"][]): Punch[] =>
@@ -408,7 +418,7 @@ describe("alertas da CLT", () => {
       startDate: MON,
       punches: list,
       overrides: [],
-      dailyMinutes: 480,
+      schedules: STANDARD,
       now: endOf(TUE),
     });
     const copy = structuredClone(days);
@@ -425,7 +435,7 @@ describe("gráfico do saldo", () => {
       startDate,
       punches: list,
       overrides: [],
-      dailyMinutes: 480,
+      schedules: STANDARD,
       now: { date: TODAY, minutes },
     });
   const at = (date: string, value: number) => ({ date, value });
@@ -529,5 +539,123 @@ describe("gráfico do saldo", () => {
       { ...base, date: TODAY, accumulated: 90 },
     ]);
     expect(series.label).toBe("Subiu 04:30 desde 22/08. Saldo de hoje: +01:30.");
+  });
+});
+
+describe("jornada por dia da semana", () => {
+  const LONG: WorkSchedule["minutes"] = [0, 540, 540, 540, 540, 240, 0];
+  const week = (minutes: number[]): WorkSchedule[] => [{ validFrom: SINCE_START, minutes }];
+  const dayIn = (
+    schedules: WorkSchedule[],
+    date: string,
+    list: Punch[] = [],
+    overrides: DayOverride[] = [],
+  ) =>
+    buildReport({
+      startDate: date,
+      punches: list,
+      overrides,
+      schedules,
+      now: { date: "2026-10-31", minutes: 0 },
+    })[0];
+  const twoSchedules: WorkSchedule[] = [
+    { validFrom: SINCE_START, minutes: [0, 480, 480, 480, 480, 480, 0] },
+    { validFrom: "2026-10-19", minutes: LONG },
+  ];
+
+  test("meta pela jornada do dia da semana", () => {
+    expect(dayIn(week(LONG), "2026-10-12").target).toBe(540);
+    expect(dayIn(week(LONG), "2026-10-16").target).toBe(240);
+  });
+
+  test("sábado com jornada sem batidas é falta", () => {
+    const d = dayIn(week([0, 480, 480, 480, 480, 480, 240]), "2026-10-10");
+    expect(d.target).toBe(240);
+    expect(d.status).toBe("falta");
+    expect(d.bankDelta).toBe(-240);
+  });
+
+  test("dia sem jornada", () => {
+    const noWednesday = week([0, 480, 480, 0, 480, 480, 0]);
+    const sat = dayIn(noWednesday, "2026-10-17");
+    const sun = dayIn(noWednesday, "2026-10-18");
+    const wed = dayIn(noWednesday, "2026-10-14");
+    for (const d of [sat, sun, wed]) expect(d.status).toBe("folga-semanal");
+    expect(statusLabel(sat)).toBe("Fim de semana");
+    expect(statusLabel(sun)).toBe("Fim de semana");
+    expect(statusLabel(wed)).toBe("Sem jornada");
+  });
+
+  test("vigência não muda os dias anteriores", () => {
+    const days = buildReport({
+      startDate: "2026-10-12",
+      punches: [],
+      overrides: [],
+      schedules: twoSchedules,
+      now: { date: "2026-10-23", minutes: 0 },
+    });
+    const target = (date: string) => days.find((d) => d.date === date)?.target;
+    expect(target("2026-10-16")).toBe(480);
+    expect(target("2026-10-23")).toBe(240);
+  });
+
+  test("jornada em vigor na data", () => {
+    const a = { validFrom: SINCE_START, minutes: [1, 1, 1, 1, 1, 1, 1] };
+    const b = { validFrom: "2026-10-19", minutes: [2, 2, 2, 2, 2, 2, 2] };
+    const c = { validFrom: "2026-11-02", minutes: [3, 3, 3, 3, 3, 3, 3] };
+    const unordered = [c, a, b];
+    const at = (date: string) =>
+      buildReport({
+        startDate: date,
+        punches: [],
+        overrides: [],
+        schedules: unordered,
+        now: { date, minutes: 0 },
+      })[0].target;
+    expect(at("2026-10-18")).toBe(1);
+    expect(at("2026-10-19")).toBe(2);
+    expect(at("2026-11-01")).toBe(2);
+    expect(at("2026-11-02")).toBe(3);
+  });
+
+  test("meta dos dias que faltam na semana", () => {
+    expect(remainingWeekTarget("2026-10-14", week(LONG))).toBe(780);
+    const fridayOff = [
+      ...week(LONG),
+      { validFrom: "2026-10-16", minutes: [0, 540, 540, 540, 540, 0, 0] },
+    ];
+    expect(remainingWeekTarget("2026-10-14", fridayOff)).toBe(540);
+  });
+
+  test("abono usa a jornada do dia", () => {
+    const fri = "2026-10-16";
+    expect(dayIn(week(LONG), fri, [], [{ date: fri, kind: "folga", note: null }]).target).toBe(0);
+    expect(
+      dayIn(week(LONG), fri, [], [{ date: fri, kind: "atestado", note: null, minutes: 60 }]).target,
+    ).toBe(180);
+  });
+
+  test("lista de jornadas", () => {
+    expect(scheduleRows(twoSchedules)).toEqual([
+      {
+        validFrom: "2026-10-19",
+        label: "A partir de 19/10/2026",
+        days: ["09:00", "09:00", "09:00", "09:00", "04:00", "00:00", "00:00"],
+        total: "40:00",
+      },
+      {
+        validFrom: SINCE_START,
+        label: "Desde o início",
+        days: ["08:00", "08:00", "08:00", "08:00", "08:00", "00:00", "00:00"],
+        total: "40:00",
+      },
+    ]);
+  });
+
+  test("formulário começa com a jornada em vigor hoje", () => {
+    expect(scheduleFormDefaults(twoSchedules, "2026-10-16")).toEqual({
+      validFrom: "2026-10-16",
+      hours: ["00:00", "08:00", "08:00", "08:00", "08:00", "08:00", "00:00"],
+    });
   });
 });

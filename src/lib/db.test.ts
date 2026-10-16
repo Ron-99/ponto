@@ -3,7 +3,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { type Client, createClient } from "@libsql/client";
-import { buildReport, type DayOverride } from "./hours";
+import { buildReport, type DayOverride, SINCE_START, type WorkSchedule } from "./hours";
+
+const STANDARD: WorkSchedule[] = [
+  { validFrom: SINCE_START, minutes: [0, 480, 480, 480, 480, 480, 0] },
+];
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ponto-db-"));
 process.env.PONTO_DB = path.join(dir, "unused.db");
@@ -40,6 +44,27 @@ const columns = async (client: Client) =>
   (await client.execute("PRAGMA table_info(day_overrides)")).rows.map((r) => r.name);
 const version = async (client: Client) =>
   (await client.execute("SELECT value FROM settings WHERE key = 'schema_version'")).rows[0]?.value;
+const schedules = async (client: Client) =>
+  (await client.execute("SELECT * FROM work_schedules ORDER BY valid_from")).rows.map((r) => [
+    r.valid_from,
+    ...[0, 1, 2, 3, 4, 5, 6].map((d) => Number(r[`d${d}`])),
+  ]);
+
+// Banco já na versão 1 (abono parcial), com a jornada única de antes.
+async function versionOneDatabase(dailyMinutes?: number) {
+  const old = await oldDatabase();
+  await old.client.batch(
+    [
+      "ALTER TABLE day_overrides ADD COLUMN minutes INTEGER CHECK (minutes IS NULL OR minutes > 0)",
+      "INSERT INTO settings (key, value) VALUES ('schema_version', '1')",
+      ...(dailyMinutes === undefined
+        ? []
+        : [`INSERT INTO settings (key, value) VALUES ('daily_minutes', '${dailyMinutes}')`]),
+    ],
+    "write",
+  );
+  return old;
+}
 
 afterEach(() => {
   globalForDb.pontoDb = undefined;
@@ -51,7 +76,8 @@ describe("migrações", () => {
     useDatabase(file);
     await db.listOverrides();
     expect(await columns(client)).toContain("minutes");
-    expect(await version(client)).toBe("1");
+    expect(await version(client)).toBe("2");
+    expect(await schedules(client)).toEqual([[SINCE_START, 0, 480, 480, 480, 480, 480, 0]]);
   });
 
   test("migração preserva abonos e saldo", async () => {
@@ -78,7 +104,7 @@ describe("migrações", () => {
         startDate: "2026-10-12",
         punches: [],
         overrides,
-        dailyMinutes: 480,
+        schedules: STANDARD,
         now: { date: "2026-10-16", minutes: 0 },
       }).at(-1)?.accumulated;
     expect(accumulated(after)).toBe(accumulated(before));
@@ -104,7 +130,7 @@ describe("migrações", () => {
     });
     await db.applyMigrations(racing);
     expect(await columns(client)).toContain("minutes");
-    expect(await version(client)).toBe("1");
+    expect(await version(client)).toBe("2");
   });
 
   test("falha de migração propaga", async () => {
@@ -120,9 +146,9 @@ describe("migrações", () => {
     useDatabase(file);
     await db.listOverrides();
     globalForDb.pontoDb = undefined;
-    // Uma segunda conexão a um banco em versão 1 não pode tentar o ALTER de novo.
+    // Uma segunda conexão a um banco já migrado não pode tentar as migrações de novo.
     await expect(db.listOverrides()).resolves.toEqual([]);
-    expect(await version(client)).toBe("1");
+    expect(await version(client)).toBe("2");
 
     // O erro de um ALTER repetido seria engolido pela releitura da versão, então
     // conta os batches: num banco já migrado, nenhum pode ser enviado.
@@ -141,5 +167,86 @@ describe("migrações", () => {
     });
     await db.applyMigrations(counting);
     expect(batches).toHaveLength(0);
+  });
+});
+
+describe("migração 2: jornada por dia da semana", () => {
+  test("migração 2 copia a jornada atual", async () => {
+    const { file, client } = await versionOneDatabase(450);
+    useDatabase(file);
+    await db.listOverrides();
+    expect(await schedules(client)).toEqual([[SINCE_START, 0, 450, 450, 450, 450, 450, 0]]);
+    expect(await version(client)).toBe("2");
+  });
+
+  test("migração 2 sem jornada usa 8h", async () => {
+    const { file, client } = await versionOneDatabase();
+    useDatabase(file);
+    await db.listOverrides();
+    expect(await schedules(client)).toEqual([[SINCE_START, 0, 480, 480, 480, 480, 480, 0]]);
+  });
+
+  test("migração 2 preserva o saldo", async () => {
+    const { file, client } = await oldDatabase();
+    await client.batch(
+      [
+        "INSERT INTO settings (key, value) VALUES ('daily_minutes', '450')",
+        "INSERT INTO day_overrides (date, kind, note) VALUES ('2026-10-12', 'feriado', 'Aparecida')",
+        "INSERT INTO punches (date, time, type) VALUES ('2026-10-13', '08:00', 'in')",
+        "INSERT INTO punches (date, time, type) VALUES ('2026-10-13', '17:00', 'out')",
+        "INSERT INTO punches (date, time, type) VALUES ('2026-10-17', '09:00', 'in')",
+        "INSERT INTO punches (date, time, type) VALUES ('2026-10-17', '11:00', 'out')",
+      ],
+      "write",
+    );
+    useDatabase(file);
+    const [overrides, punches, migrated] = await Promise.all([
+      db.listOverrides(),
+      db.listPunches(),
+      db.listSchedules(),
+    ]);
+    const accumulated = (list: WorkSchedule[]) =>
+      buildReport({
+        startDate: "2026-10-12",
+        punches,
+        overrides,
+        schedules: list,
+        now: { date: "2026-10-20", minutes: 0 },
+      }).at(-1)?.accumulated;
+    // A jornada única de antes: 07:30 de segunda a sexta, 0 no fim de semana.
+    const before = [{ validFrom: SINCE_START, minutes: [0, 450, 450, 450, 450, 450, 0] }];
+    expect(accumulated(migrated)).toBe(accumulated(before));
+    // Seg feriado, ter +90, qua a sex −450 cada, sáb +120, seg 19 −450, ter 20 é hoje.
+    expect(accumulated(migrated)).toBe(90 - 3 * 450 + 120 - 450);
+  });
+
+  test("migração 2 concorrente segue", async () => {
+    const { file, client } = await versionOneDatabase(480);
+    const other = createClient({ url: `file:${file}` });
+    const racing = new Proxy(client, {
+      get(target, prop) {
+        if (prop === "batch") {
+          return async (...args: Parameters<Client["batch"]>) => {
+            await db.applyMigrations(other);
+            return target.batch(...args);
+          };
+        }
+        const value = Reflect.get(target, prop);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    await db.applyMigrations(racing);
+    expect(await version(client)).toBe("2");
+    expect(await schedules(client)).toHaveLength(1);
+  });
+
+  test("falha da migração 2 propaga", async () => {
+    const { client } = await versionOneDatabase(480);
+    // A tabela já existe mas a versão não: o CREATE falha e ninguém gravou a versão 2.
+    await client.execute("CREATE TABLE work_schedules (valid_from TEXT PRIMARY KEY)");
+    await expect(db.applyMigrations(client)).rejects.toThrow();
+    expect(await version(client)).toBe("1");
+    const { rows } = await client.execute("SELECT count(*) AS n FROM work_schedules");
+    expect(Number(rows[0].n)).toBe(0);
   });
 });

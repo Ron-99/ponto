@@ -1,4 +1,4 @@
-import { addDays, eachDayOfInterval, format, isWeekend, parseISO, startOfWeek } from "date-fns";
+import { addDays, eachDayOfInterval, format, parseISO, startOfWeek } from "date-fns";
 
 export type PunchType = "in" | "out";
 export type OverrideKind = "feriado" | "folga" | "atestado";
@@ -60,10 +60,14 @@ const STATUS_LABELS: Record<DayStatus, string> = {
 };
 
 /** Rótulo do status do dia; num dia abonado, o tipo do abono. */
-export const statusLabel = (day: DaySummary) =>
-  day.status === "abonado" && day.override
-    ? OVERRIDE_LABELS[day.override.kind]
-    : STATUS_LABELS[day.status];
+export const statusLabel = (day: DaySummary) => {
+  if (day.status === "abonado" && day.override) return OVERRIDE_LABELS[day.override.kind];
+  // Dia sem jornada: "Fim de semana" só no sábado e no domingo.
+  if (day.status === "folga-semanal" && day.weekday !== 0 && day.weekday !== 6) {
+    return "Sem jornada";
+  }
+  return STATUS_LABELS[day.status];
+};
 
 export const toMinutes = (time: string) => {
   const [h, m] = time.split(":").map(Number);
@@ -112,10 +116,33 @@ export const nextPunchType = (punches: Punch[]): PunchType => {
   return last?.type === "in" ? "out" : "in";
 };
 
-export function targetFor(date: string, override: DayOverride | null, dailyMinutes: number) {
-  if (isWeekend(parseISO(date))) return 0;
-  if (override?.minutes) return Math.max(0, dailyMinutes - override.minutes);
-  return override ? 0 : dailyMinutes;
+/** Jornada em minutos de domingo (0) a sábado (6), como `getDay()`. */
+export type WeekMinutes = number[];
+
+/** Jornada que vale a partir de `validFrom`; `SINCE_START` vale desde o início. */
+export type WorkSchedule = { validFrom: string; minutes: WeekMinutes };
+
+export const SINCE_START = "0000-01-01";
+
+export const DAY_NAMES = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+
+/** Jornada em vigor na data: a de maior `validFrom` menor ou igual a ela. */
+export function scheduleFor(date: string, schedules: WorkSchedule[]): WorkSchedule {
+  let current: WorkSchedule | undefined;
+  for (const s of schedules) {
+    if (s.validFrom <= date && (!current || s.validFrom > current.validFrom)) current = s;
+  }
+  return current ?? { validFrom: SINCE_START, minutes: [0, 0, 0, 0, 0, 0, 0] };
+}
+
+/** Minutos de jornada do dia da semana de `date`, pela jornada em vigor. */
+export const jornadaFor = (date: string, schedules: WorkSchedule[]) =>
+  scheduleFor(date, schedules).minutes[parseISO(date).getDay()];
+
+/** Meta do dia: a jornada daquele dia, zerada pelo abono ou reduzida pelo abono parcial. */
+export function targetFor(_date: string, override: DayOverride | null, dayMinutes: number) {
+  if (override?.minutes) return Math.max(0, dayMinutes - override.minutes);
+  return override ? 0 : dayMinutes;
 }
 
 const isFullDay = (override: DayOverride | null) => !!override && !override.minutes;
@@ -126,12 +153,12 @@ export function summarizeDay(
   date: string,
   punches: Punch[],
   override: DayOverride | null,
-  dailyMinutes: number,
+  dayMinutes: number,
   now: Now,
 ): DaySummary {
   const sorted = sortPunches(punches);
   const isToday = date === now.date;
-  const target = targetFor(date, override, dailyMinutes);
+  const target = targetFor(date, override, dayMinutes);
   const invalid = validateSequence(sorted) !== null;
 
   let worked = 0;
@@ -207,7 +234,7 @@ export type ReportInput = {
   startDate: string;
   punches: Punch[];
   overrides: DayOverride[];
-  dailyMinutes: number;
+  schedules: WorkSchedule[];
   now: Now;
 };
 
@@ -218,7 +245,7 @@ export function buildReport({
   startDate,
   punches,
   overrides,
-  dailyMinutes,
+  schedules,
   now,
 }: ReportInput): ReportDay[] {
   if (startDate > now.date) return [];
@@ -241,7 +268,7 @@ export function buildReport({
       date,
       byDate.get(date) ?? [],
       overrideByDate.get(date) ?? null,
-      dailyMinutes,
+      jornadaFor(date, schedules),
       now,
     );
     accumulated += day.bankDelta;
@@ -253,6 +280,39 @@ export const weekKey = (date: string) =>
   format(startOfWeek(parseISO(date), { weekStartsOn: 1 }), "yyyy-MM-dd");
 
 export const weekEnd = (date: string) => format(addDays(parseISO(weekKey(date)), 6), "yyyy-MM-dd");
+
+/** Jornada dos dias da semana atual que vêm depois de `today`, até domingo. */
+export function remainingWeekTarget(today: string, schedules: WorkSchedule[]) {
+  let total = 0;
+  const end = weekEnd(today);
+  for (let d = addDays(parseISO(today), 1); format(d, "yyyy-MM-dd") <= end; d = addDays(d, 1)) {
+    total += jornadaFor(format(d, "yyyy-MM-dd"), schedules);
+  }
+  return total;
+}
+
+/** Ordem dos campos na tela: segunda a domingo (índices de `getDay()`). */
+export const FORM_DAYS = [1, 2, 3, 4, 5, 6, 0];
+
+/** Linhas da lista de jornadas em Configurações, da mais recente para a mais antiga. */
+export const scheduleRows = (schedules: WorkSchedule[]) =>
+  [...schedules]
+    .sort((a, b) => b.validFrom.localeCompare(a.validFrom))
+    .map((s) => ({
+      validFrom: s.validFrom,
+      label:
+        s.validFrom === SINCE_START
+          ? "Desde o início"
+          : `A partir de ${format(parseISO(s.validFrom), "dd/MM/yyyy")}`,
+      days: FORM_DAYS.map((i) => formatDuration(s.minutes[i])),
+      total: formatDuration(s.minutes.reduce((sum, m) => sum + m, 0)),
+    }));
+
+/** Valores iniciais do formulário: a jornada em vigor hoje, a partir de hoje. */
+export const scheduleFormDefaults = (schedules: WorkSchedule[], today: string) => ({
+  validFrom: today,
+  hours: scheduleFor(today, schedules).minutes.map((m) => formatDuration(m)),
+});
 
 export type WeekGroup = {
   weekStart: string;

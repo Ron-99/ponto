@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { csvFilename, exportHref, parseReportParams, rangeFor, reportCsv } from "./csv";
-import { buildReport, type DayOverride, type DayStatus, type Punch, type ReportDay } from "./hours";
+import {
+  buildReport,
+  type DayOverride,
+  type DayStatus,
+  type Punch,
+  type ReportDay,
+  SINCE_START,
+  type WorkSchedule,
+} from "./hours";
 
 const HEADER =
   "Data;Dia;Batidas;Trabalhado;Meta;Saldo;Acumulado;Status;Abono;Horas abonadas;Observações";
@@ -12,6 +20,10 @@ const TUE = "2026-10-13";
 const WED = "2026-10-14";
 const SAT = "2026-10-17";
 const past = { date: "2099-01-01", minutes: 0 };
+// Jornada padrão: 08:00 de segunda a sexta, desde o início.
+const STANDARD: WorkSchedule[] = [
+  { validFrom: SINCE_START, minutes: [0, 480, 480, 480, 480, 480, 0] },
+];
 
 let nextId = 1;
 const punch = (date: string, time: string, type: "in" | "out", note: string | null = null) => ({
@@ -25,7 +37,7 @@ const punches = (date: string, ...times: string[]): Punch[] =>
   times.map((t, i) => punch(date, t, i % 2 === 0 ? "in" : "out"));
 
 const report = (startDate: string, list: Punch[], overrides: DayOverride[] = [], now = past) =>
-  buildReport({ startDate, punches: list, overrides, dailyMinutes: 480, now });
+  buildReport({ startDate, punches: list, overrides, schedules: STANDARD, now });
 
 /** Um dia de `MON` (passado) com batidas e abono opcionais. */
 const dayOf = (list: Punch[], override: DayOverride | null = null, date = MON) =>
@@ -97,7 +109,7 @@ describe("exportação CSV", () => {
         ...punches(TUE, "08:00", "12:00", "13:00", "16:30"),
       ],
       overrides: [{ date: WED, kind: "folga", note: null }],
-      dailyMinutes: 480,
+      schedules: STANDARD,
       now: { date: WED, minutes: 10 * 60 },
     });
     const rows = parse(reportCsv(days)).slice(1);
@@ -187,8 +199,11 @@ describe("exportação CSV", () => {
       pendente: "Sem batidas",
     };
     const base = dayOf([]);
+    // "Fim de semana" é o rótulo de dia sem jornada no sábado e no domingo.
+    const saturday = dayOf([], null, SAT);
     for (const [status, label] of Object.entries(labels) as [DayStatus, string][]) {
-      expect(rowOf({ ...base, status })[7]).toBe(label);
+      const day = status === "folga-semanal" ? saturday : base;
+      expect(rowOf({ ...day, status })[7]).toBe(label);
     }
     for (const [kind, label] of [
       ["feriado", "Feriado"],

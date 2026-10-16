@@ -1,6 +1,6 @@
 import "server-only";
 import { connection } from "next/server";
-import { firstPunchDate, getSettings, listOverrides, listPunches } from "./db";
+import { firstPunchDate, getSettings, listOverrides, listPunches, listSchedules } from "./db";
 import { syncNationalHolidays } from "./holidays";
 import { buildReport } from "./hours";
 
@@ -32,7 +32,11 @@ export const currentNow = () => {
 export async function loadBank() {
   await connection();
   const now = currentNow();
-  const [settings, firstPunch] = await Promise.all([getSettings(), firstPunchDate()]);
+  const [settings, firstPunch, schedules] = await Promise.all([
+    getSettings(),
+    firstPunchDate(),
+    listSchedules(),
+  ]);
   const startDate = settings.startDate ?? firstPunch ?? now.date;
   await syncNationalHolidays(startDate, now.date);
   const [punches, overrides] = await Promise.all([listPunches(startDate), listOverrides()]);
@@ -40,12 +44,13 @@ export async function loadBank() {
     startDate,
     punches,
     overrides,
-    dailyMinutes: settings.dailyMinutes,
+    schedules,
     now,
   });
   return {
     now,
     settings,
+    schedules,
     startDate,
     days,
     total: days.at(-1)?.accumulated ?? 0,

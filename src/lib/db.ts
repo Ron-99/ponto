@@ -2,7 +2,7 @@ import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 import { type Client, createClient, type InArgs } from "@libsql/client";
-import type { DayOverride, OverrideKind, Punch, PunchType } from "./hours";
+import type { DayOverride, OverrideKind, Punch, PunchType, WorkSchedule } from "./hours";
 
 /**
  * Em produção (Vercel) usa o Turso via TURSO_DATABASE_URL/TURSO_AUTH_TOKEN.
@@ -48,9 +48,21 @@ const UPSERT_SETTING =
  * Migrações em ordem; a posição + 1 é a versão. Cada uma roda num batch junto com a
  * gravação de `schema_version`, então ou as duas coisas persistem ou nenhuma.
  */
+const DAYS = ["d0", "d1", "d2", "d3", "d4", "d5", "d6"];
+
 const MIGRATIONS: string[][] = [
   // 1: abono parcial (minutos abonados; NULL = dia inteiro)
   ["ALTER TABLE day_overrides ADD COLUMN minutes INTEGER CHECK (minutes IS NULL OR minutes > 0)"],
+  // 2: jornada por dia da semana com vigência (d0 = domingo). A linha 0000-01-01 vale desde o
+  // início e recebe a jornada única de antes, de segunda a sexta.
+  [
+    `CREATE TABLE work_schedules (
+      valid_from TEXT PRIMARY KEY,
+      ${DAYS.map((d) => `${d} INTEGER NOT NULL CHECK (${d} BETWEEN 0 AND 1440)`).join(",\n      ")}
+    )`,
+    `INSERT INTO work_schedules SELECT '0000-01-01', 0, m, m, m, m, m, 0
+     FROM (SELECT coalesce((SELECT CAST(value AS INTEGER) FROM settings WHERE key = 'daily_minutes'), 480) AS m)`,
+  ],
 ];
 
 async function schemaVersion(client: Client) {
@@ -189,29 +201,38 @@ export async function saveHolidays(year: number, holidays: { date: string; name:
 }
 
 export type Settings = {
-  dailyMinutes: number;
   /** Data de início do banco; se vazia, usa a primeira batida. */
   startDate: string | null;
 };
 
+// `daily_minutes` (jornada única de antes da migração 2) fica no banco e não é mais lido.
 export async function getSettings(): Promise<Settings> {
-  const rows = await all<{ key: string; value: string }>("SELECT key, value FROM settings");
-  const map = new Map(rows.map((r) => [r.key, r.value]));
-  return {
-    dailyMinutes: Number(map.get("daily_minutes") ?? 480),
-    startDate: map.get("start_date") || null,
-  };
+  const rows = await all<{ value: string }>("SELECT value FROM settings WHERE key = 'start_date'");
+  return { startDate: rows[0]?.value || null };
 }
 
-export async function saveSettings(s: Settings) {
-  await (await db()).batch(
-    [
-      { sql: UPSERT_SETTING, args: ["daily_minutes", String(s.dailyMinutes)] },
-      { sql: UPSERT_SETTING, args: ["start_date", s.startDate ?? ""] },
-    ],
-    "write",
+export const saveSettings = (s: Settings) => run(UPSERT_SETTING, ["start_date", s.startDate ?? ""]);
+
+export async function listSchedules(): Promise<WorkSchedule[]> {
+  const rows = await all<Record<string, string | number>>(
+    `SELECT valid_from, ${DAYS.join(", ")} FROM work_schedules ORDER BY valid_from`,
   );
+  return rows.map((r) => ({
+    validFrom: String(r.valid_from),
+    minutes: DAYS.map((d) => Number(r[d])),
+  }));
 }
+
+/** Grava a jornada que vale a partir de `validFrom`; a mesma data substitui a anterior. */
+export const saveSchedule = (s: WorkSchedule) =>
+  run(
+    `INSERT INTO work_schedules (valid_from, ${DAYS.join(", ")}) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (valid_from) DO UPDATE SET ${DAYS.map((d) => `${d} = excluded.${d}`).join(", ")}`,
+    [s.validFrom, ...s.minutes],
+  );
+
+export const deleteSchedule = (validFrom: string) =>
+  run("DELETE FROM work_schedules WHERE valid_from = ?", [validFrom]);
 
 export async function firstPunchDate(): Promise<string | null> {
   const [row] = await all<{ d: string | null }>("SELECT min(date) AS d FROM punches");

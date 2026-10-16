@@ -49,15 +49,15 @@ O app pode ser instalado como PWA e abre direto no painel, em tela cheia.
 
 ## Regras
 
-- Jornada padrão de 8h por dia útil (segunda a sexta) = 40h por semana. A jornada pode ser alterada em **Configurações**.
+- **Jornada por dia da semana**: o padrão é 8h de segunda a sexta (40h por semana) e 0h no sábado e no domingo. Em **Configurações**, cada dia pode ter sua jornada (por exemplo, 9h de segunda a quinta e 4h na sexta, ou 4h no sábado numa escala de 44h). Cada jornada vale a partir de uma data, e os dias anteriores mantêm a que valia para eles. Com a data em branco, a jornada vale desde o início do banco.
 - **Bater ponto** registra o horário atual. O tipo (entrada ou saída) vem da última batida do dia.
 - **Batida avulsa** registra um horário escolhido. As batidas do dia precisam alternar entrada e saída, começando por entrada.
 - Um dia passado com número ímpar de batidas aparece como pendente. Só os pares fechados contam no saldo.
-- Um dia útil passado sem batidas conta −8h. Marque feriados, folgas e atestados como **abono** (meta de 0h).
+- Um dia passado com jornada e sem batidas conta a jornada inteira como negativa (−8h no padrão). Marque feriados, folgas e atestados como **abono** (meta de 0h).
 - **Feriados nacionais** são abonados automaticamente. Os de cada ano do banco são importados uma vez da [BrasilAPI](https://brasilapi.com.br/docs#tag/Feriados-Nacionais), incluindo Carnaval e Corpus Christi. Se você trabalha num deles, marque o dia como "Dia normal", e ele não volta. Abonos que você já tinha marcado não são alterados. Feriados municipais e pontes continuam manuais.
-- **Abono parcial**: preencha as horas abonadas (HH:MM) antes de escolher o tipo do abono. A meta do dia vira a jornada menos essas horas. Por exemplo, uma consulta de 2h com atestado deixa a meta em 6h. Só vale para dias úteis, e as horas precisam ser menores que a jornada.
+- **Abono parcial**: preencha as horas abonadas (HH:MM) antes de escolher o tipo do abono. A meta do dia vira a jornada menos essas horas. Por exemplo, uma consulta de 2h com atestado deixa a meta em 6h. Só vale para dias com jornada, e as horas precisam ser menores que a jornada daquele dia.
 - **Exportar CSV** (relatório): baixa o período em tela num arquivo que abre direto no Excel em pt-BR, com separador `;`. Cada linha é um dia: batidas, trabalhado, meta, saldo, acumulado, status, abono e observações. Os números são os mesmos da tela.
-- Horas trabalhadas no fim de semana ou em dia abonado contam inteiras como extra.
+- Horas trabalhadas num dia sem jornada (o fim de semana, no padrão) ou em dia abonado contam inteiras como extra.
 - O saldo é acumulado desde a data de início do banco (por padrão, a primeira batida). Durante o dia de hoje, só o excedente entra no total. Assim o saldo não fica negativo no meio do expediente.
 
 ## Scripts
