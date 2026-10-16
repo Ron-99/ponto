@@ -163,6 +163,31 @@ export const setOverride = (
       )
     : run("DELETE FROM day_overrides WHERE date = ?", [date]);
 
+const HOLIDAYS_SYNCED = "holidays_synced:";
+
+/** Anos cujos feriados nacionais já foram importados. */
+export async function syncedHolidayYears(): Promise<number[]> {
+  const rows = await all<{ key: string }>("SELECT key FROM settings WHERE key LIKE ?", [
+    `${HOLIDAYS_SYNCED}%`,
+  ]);
+  return rows.map((r) => Number(r.key.slice(HOLIDAYS_SYNCED.length)));
+}
+
+/** Grava os feriados de um ano sem sobrescrever abonos e marca o ano, tudo num batch. */
+export async function saveHolidays(year: number, holidays: { date: string; name: string }[]) {
+  await (await db()).batch(
+    [
+      ...holidays.map((h) => ({
+        sql: `INSERT INTO day_overrides (date, kind, note) VALUES (?, 'feriado', ?)
+              ON CONFLICT (date) DO NOTHING`,
+        args: [h.date, h.name],
+      })),
+      { sql: UPSERT_SETTING, args: [`${HOLIDAYS_SYNCED}${year}`, "1"] },
+    ],
+    "write",
+  );
+}
+
 export type Settings = {
   dailyMinutes: number;
   /** Data de início do banco; se vazia, usa a primeira batida. */

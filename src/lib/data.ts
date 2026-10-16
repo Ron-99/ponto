@@ -1,6 +1,7 @@
 import "server-only";
 import { connection } from "next/server";
 import { firstPunchDate, getSettings, listOverrides, listPunches } from "./db";
+import { syncNationalHolidays } from "./holidays";
 import { buildReport } from "./hours";
 
 // O servidor da Vercel roda em UTC; o ponto precisa do horário local de quem trabalha.
@@ -31,15 +32,13 @@ export const currentNow = () => {
 export async function loadBank() {
   await connection();
   const now = currentNow();
-  const [settings, firstPunch, overrides] = await Promise.all([
-    getSettings(),
-    firstPunchDate(),
-    listOverrides(),
-  ]);
+  const [settings, firstPunch] = await Promise.all([getSettings(), firstPunchDate()]);
   const startDate = settings.startDate ?? firstPunch ?? now.date;
+  await syncNationalHolidays(startDate, now.date);
+  const [punches, overrides] = await Promise.all([listPunches(startDate), listOverrides()]);
   const days = buildReport({
     startDate,
-    punches: await listPunches(startDate),
+    punches,
     overrides,
     dailyMinutes: settings.dailyMinutes,
     now,

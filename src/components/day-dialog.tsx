@@ -25,6 +25,7 @@ import {
   OVERRIDE_LABELS,
   type OverrideKind,
   overrideHoursValue,
+  overrideTitle,
   type Punch,
   type PunchType,
   validateSequence,
@@ -187,7 +188,7 @@ export function DayDialog({ day }: { day: DaySummary }) {
         <Separator />
 
         <div className="grid gap-2">
-          <Label>Abono do dia</Label>
+          <Label>{overrideTitle(day.override)}</Label>
           {/* A key reinicia o campo de horas depois de salvar. */}
           <OverridePicker key={`${day.override?.kind}-${day.override?.minutes}`} day={day} />
           <p className="text-xs text-muted-foreground">

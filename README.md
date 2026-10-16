@@ -47,6 +47,7 @@ Para migrar os dados locais para o Turso, faça isto antes de abrir o app em pro
 - **Batida avulsa** registra um horário escolhido. As batidas do dia precisam alternar entrada e saída, começando por entrada.
 - Um dia passado com número ímpar de batidas aparece como pendente. Só os pares fechados contam no saldo.
 - Um dia útil passado sem batidas conta −8h. Marque feriados, folgas e atestados como **abono** (meta de 0h).
+- **Feriados nacionais** são abonados automaticamente. Os de cada ano do banco são importados uma vez da [BrasilAPI](https://brasilapi.com.br/docs#tag/Feriados-Nacionais), incluindo Carnaval e Corpus Christi. Se você trabalha num deles, marque o dia como "Dia normal", e ele não volta. Abonos que você já tinha marcado não são alterados. Feriados municipais e pontes continuam manuais.
 - **Abono parcial**: preencha as horas abonadas (HH:MM) antes de escolher o tipo do abono. A meta do dia vira a jornada menos essas horas. Por exemplo, uma consulta de 2h com atestado deixa a meta em 6h. Só vale para dias úteis, e as horas precisam ser menores que a jornada.
 - Horas trabalhadas no fim de semana ou em dia abonado contam inteiras como extra.
 - O saldo é acumulado desde a data de início do banco (por padrão, a primeira batida). Durante o dia de hoje, só o excedente entra no total. Assim o saldo não fica negativo no meio do expediente.

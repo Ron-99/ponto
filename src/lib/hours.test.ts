@@ -7,6 +7,7 @@ import {
   groupByWeek,
   nextPunchType,
   overrideHoursValue,
+  overrideTitle,
   type Punch,
   partialOverrideLabel,
   summarizeDay,
@@ -259,4 +260,12 @@ describe("abono parcial", () => {
     expect(partialOverrideLabel(full(MON))).toBeNull();
     expect(partialOverrideLabel(null)).toBeNull();
   });
+});
+
+test("título do abono mostra a observação", () => {
+  expect(overrideTitle({ date: MON, kind: "feriado", note: "Tiradentes" })).toBe(
+    "Abono do dia · Tiradentes",
+  );
+  expect(overrideTitle({ date: MON, kind: "folga", note: null })).toBe("Abono do dia");
+  expect(overrideTitle(null)).toBe("Abono do dia");
 });

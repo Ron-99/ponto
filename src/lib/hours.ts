@@ -172,6 +172,10 @@ export function targetDescription(day: DaySummary) {
   return `${text} (${OVERRIDE_LABELS[override.kind].toLowerCase()} de ${formatDuration(override.minutes)})`;
 }
 
+/** Título da seção de abono do DayDialog, com o nome do feriado (ou a observação) se houver. */
+export const overrideTitle = (override: DayOverride | null) =>
+  override?.note ? `Abono do dia · ${override.note}` : "Abono do dia";
+
 /** Valor do campo "Horas abonadas": HH:MM no abono parcial, vazio caso contrário. */
 export const overrideHoursValue = (override: DayOverride | null) =>
   override?.minutes ? formatDuration(override.minutes) : "";
