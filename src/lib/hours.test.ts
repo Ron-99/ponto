@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   buildReport,
   closeTime,
+  cltAlerts,
   type DayOverride,
   formatDuration,
   groupByWeek,
@@ -268,4 +269,148 @@ test("título do abono mostra a observação", () => {
   );
   expect(overrideTitle({ date: MON, kind: "folga", note: null })).toBe("Abono do dia");
   expect(overrideTitle(null)).toBe("Abono do dia");
+});
+
+describe("alertas da CLT", () => {
+  const BREAK = "A CLT pede pelo menos 1h acima de 6h.";
+  const EXTRA = "A CLT permite até 2h por dia.";
+  const REST = "A CLT pede pelo menos 11h.";
+  const endOf = (date: string) => ({ date, minutes: 23 * 60 + 59 });
+  const alertsOn = (
+    today: string,
+    startDate: string,
+    list: Punch[],
+    now: { date: string; minutes: number } = endOf(today),
+  ) =>
+    cltAlerts(
+      buildReport({ startDate, punches: list, overrides: [], dailyMinutes: 480, now }),
+      today,
+    );
+  const typed = (date: string, ...items: [string, "in" | "out"][]): Punch[] =>
+    items.map(([time, type]) => ({ id: nextId++, date, time, type, note: null }));
+
+  test("alerta de intervalo curto", () => {
+    expect(alertsOn(TUE, TUE, punches(TUE, "08:00", "12:00", "12:30", "16:00"))).toEqual([
+      `Intervalo de 00:30 numa jornada de 07:30. ${BREAK}`,
+    ]);
+    expect(
+      alertsOn(TUE, TUE, punches(TUE, "08:00", "11:00", "11:20", "13:00", "13:40", "16:00")),
+    ).toEqual([`Intervalo de 00:40 numa jornada de 07:00. ${BREAK}`]);
+  });
+
+  test("alerta sem intervalo", () => {
+    expect(alertsOn(TUE, TUE, punches(TUE, "08:00", "14:20"))).toEqual([
+      `Sem intervalo numa jornada de 06:20. ${BREAK}`,
+    ]);
+    expect(alertsOn(TUE, TUE, punches(TUE, "08:00"), { date: TUE, minutes: 14 * 60 + 30 })).toEqual(
+      [`Sem intervalo numa jornada de 06:30. ${BREAK}`],
+    );
+  });
+
+  test("intervalo de 1h não alerta", () => {
+    expect(alertsOn(TUE, TUE, punches(TUE, "08:00", "12:00", "13:00", "17:00"))).toEqual([]);
+    expect(alertsOn(TUE, TUE, punches(TUE, "08:00", "12:00", "12:59", "17:00"))).toEqual([
+      `Intervalo de 00:59 numa jornada de 08:01. ${BREAK}`,
+    ]);
+  });
+
+  test("jornada de até 6h não pede intervalo", () => {
+    expect(alertsOn(TUE, TUE, punches(TUE, "08:00", "11:00", "11:30", "14:30"))).toEqual([]);
+    expect(alertsOn(TUE, TUE, punches(TUE, "08:00", "11:00", "11:30", "14:31"))).toEqual([
+      `Intervalo de 00:30 numa jornada de 06:01. ${BREAK}`,
+    ]);
+  });
+
+  test("alerta de horas extras", () => {
+    expect(alertsOn(TUE, TUE, punches(TUE, "08:00", "12:00", "13:00", "19:30"))).toEqual([
+      `02:30 de horas extras hoje. ${EXTRA}`,
+    ]);
+    expect(alertsOn(SAT, SAT, punches(SAT, "08:00", "10:31"))).toEqual([
+      `02:31 de horas extras hoje. ${EXTRA}`,
+    ]);
+  });
+
+  test("2h extras não alerta", () => {
+    expect(alertsOn(TUE, TUE, punches(TUE, "08:00", "12:00", "13:00", "19:00"))).toEqual([]);
+    expect(alertsOn(TUE, TUE, punches(TUE, "08:00", "12:00", "13:00", "19:01"))).toEqual([
+      `02:01 de horas extras hoje. ${EXTRA}`,
+    ]);
+  });
+
+  test("horas extras com entrada aberta", () => {
+    const extras = (minutes: number) =>
+      alertsOn(TUE, TUE, punches(TUE, "07:00"), { date: TUE, minutes }).filter((a) =>
+        a.includes("horas extras"),
+      );
+    expect(extras(17 * 60)).toEqual([]);
+    expect(extras(17 * 60 + 1)).toEqual([`02:01 de horas extras hoje. ${EXTRA}`]);
+  });
+
+  test("alerta de descanso curto", () => {
+    const list = [...punches(MON, "13:00", "22:00"), ...punches(TUE, "07:30", "11:30")];
+    expect(alertsOn(TUE, MON, list)).toEqual([
+      `Descanso de 09:30 desde a saída de ontem às 22:00. ${REST}`,
+    ]);
+  });
+
+  test("11h de descanso não alerta", () => {
+    const at = (entry: string, exit: string) =>
+      alertsOn(TUE, MON, [...punches(MON, "13:00", "22:00"), ...punches(TUE, entry, exit)]);
+    expect(at("09:00", "13:00")).toEqual([]);
+    expect(at("08:59", "12:59")).toEqual([
+      `Descanso de 10:59 desde a saída de ontem às 22:00. ${REST}`,
+    ]);
+  });
+
+  test("descanso sem saída válida ontem", () => {
+    const today = punches(TUE, "06:00", "10:00");
+    // Banco começou hoje: ontem não está nos dias.
+    expect(alertsOn(TUE, TUE, [...punches(MON, "13:00", "22:00"), ...today])).toEqual([]);
+    // Ontem sem batidas.
+    expect(alertsOn(TUE, MON, today)).toEqual([]);
+    // Ontem termina numa entrada (incompleto).
+    expect(alertsOn(TUE, MON, [...punches(MON, "13:00", "22:00", "23:00"), ...today])).toEqual([]);
+    // Ontem inconsistente, terminando numa saída.
+    const bad = typed(MON, ["13:00", "in"], ["18:00", "out"], ["22:00", "out"]);
+    expect(alertsOn(TUE, MON, [...bad, ...today])).toEqual([]);
+  });
+
+  test("descanso compara com ontem, não com o último dia com batidas", () => {
+    const list = [...punches(MON, "15:00", "23:00"), ...punches(WED, "07:00", "11:00")];
+    expect(alertsOn(WED, MON, list)).toEqual([]);
+  });
+
+  test("alertas em ordem", () => {
+    const list = [
+      ...punches(MON, "15:00", "23:00"),
+      ...punches(TUE, "07:00", "12:00", "12:20", "18:00"),
+    ];
+    expect(alertsOn(TUE, MON, list)).toEqual([
+      `Intervalo de 00:20 numa jornada de 10:40. ${BREAK}`,
+      `02:40 de horas extras hoje. ${EXTRA}`,
+      `Descanso de 08:00 desde a saída de ontem às 23:00. ${REST}`,
+    ]);
+  });
+
+  test("dia inconsistente não alerta intervalo nem extras", () => {
+    expect(alertsOn(TUE, TUE, typed(TUE, ["07:00", "in"], ["15:00", "in"]))).toEqual([]);
+  });
+
+  test("alertas não mudam o dia", () => {
+    const list = [
+      ...punches(MON, "15:00", "23:00"),
+      ...punches(TUE, "07:00", "12:00", "12:20", "18:00"),
+    ];
+    const days = buildReport({
+      startDate: MON,
+      punches: list,
+      overrides: [],
+      dailyMinutes: 480,
+      now: endOf(TUE),
+    });
+    const copy = structuredClone(days);
+    expect(cltAlerts(days, TUE)).toHaveLength(3);
+    expect(days).toEqual(copy);
+    expect(alertsOn(TUE, TUE, punches(TUE, "08:00", "12:00", "13:00", "17:00"))).toEqual([]);
+  });
 });

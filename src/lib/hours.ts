@@ -264,5 +264,54 @@ export function groupByWeek(days: ReportDay[]): WeekGroup[] {
   }));
 }
 
+const BREAK_RULE = "A CLT pede pelo menos 1h acima de 6h.";
+
+/**
+ * Avisos da CLT para hoje: intervalo de 1h acima de 6h trabalhadas (art. 71), até 2h extras
+ * (art. 59) e 11h de descanso desde a saída de ontem (art. 66). Só lê os dias.
+ */
+export function cltAlerts(days: DaySummary[], today: string): string[] {
+  const day = days.find((d) => d.date === today);
+  if (!day) return [];
+  const alerts: string[] = [];
+  const { punches } = day;
+
+  if (day.status !== "inconsistente") {
+    if (day.worked > 6 * 60) {
+      const breaks: number[] = [];
+      for (let i = 1; i + 1 < punches.length; i += 2) {
+        breaks.push(toMinutes(punches[i + 1].time) - toMinutes(punches[i].time));
+      }
+      const longest = Math.max(...breaks);
+      const worked = formatDuration(day.worked);
+      if (breaks.length === 0)
+        alerts.push(`Sem intervalo numa jornada de ${worked}. ${BREAK_RULE}`);
+      else if (longest < 60) {
+        alerts.push(
+          `Intervalo de ${formatDuration(longest)} numa jornada de ${worked}. ${BREAK_RULE}`,
+        );
+      }
+    }
+    const extra = day.worked - day.target;
+    if (extra > 120) {
+      alerts.push(`${formatDuration(extra)} de horas extras hoje. A CLT permite até 2h por dia.`);
+    }
+  }
+
+  const yesterday = format(addDays(parseISO(today), -1), "yyyy-MM-dd");
+  const previous = days.find((d) => d.date === yesterday);
+  const lastOut = previous?.status === "inconsistente" ? undefined : previous?.punches.at(-1);
+  const firstIn = punches[0];
+  if (lastOut?.type === "out" && firstIn?.type === "in") {
+    const rest = 24 * 60 - toMinutes(lastOut.time) + toMinutes(firstIn.time);
+    if (rest < 11 * 60) {
+      alerts.push(
+        `Descanso de ${formatDuration(rest)} desde a saída de ontem às ${lastOut.time}. A CLT pede pelo menos 11h.`,
+      );
+    }
+  }
+  return alerts;
+}
+
 export const needsAttention = (status: DayStatus) =>
   status === "incompleto" || status === "inconsistente";

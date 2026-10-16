@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { loadBank } from "@/lib/data";
 import {
   closeTime,
+  cltAlerts,
   formatDuration,
   needsAttention,
   nextPunchType,
@@ -48,6 +49,7 @@ async function Dashboard() {
     week.reduce((s, d) => s + d.target, 0) + futureWeekdays * settings.dailyMinutes;
   const weekBalance = week.reduce((s, d) => s + d.bankDelta, 0);
   const attention = days.filter((d) => !d.isToday && needsAttention(d.status));
+  const alerts = cltAlerts(days, now.date);
 
   return (
     <div className="grid gap-6">
@@ -107,6 +109,16 @@ async function Dashboard() {
             <CardDescription>{targetDescription(today)}</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
+            {alerts.length > 0 && (
+              <ul className="grid gap-1.5 text-sm text-amber-700 dark:text-amber-400">
+                {alerts.map((a) => (
+                  <li key={a} className="flex gap-2">
+                    <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" />
+                    {a}
+                  </li>
+                ))}
+              </ul>
+            )}
             <div className="flex items-center gap-2">
               <PunchChips day={today} />
               <span className="ml-auto">
