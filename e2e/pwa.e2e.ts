@@ -273,6 +273,14 @@ describe("exportação CSV", () => {
     expect(decode(await bytes(response))).toBe(`﻿${HEADER}`);
   });
 
+  test("csv com período repetido cai no mês", async () => {
+    const response = await withSession("/relatorio/csv?periodo=semana&periodo=tudo&ref=2026-10-05");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-disposition")).toBe(
+      'attachment; filename="ponto-2026-10.csv"',
+    );
+  });
+
   test("csv exige sessão", async () => {
     const response = await get("/relatorio/csv?periodo=mes&ref=2026-10-05");
     expect(response.status).toBe(307);
