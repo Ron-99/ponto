@@ -15,6 +15,8 @@ export type DayOverride = {
   date: string;
   kind: OverrideKind;
   note: string | null;
+  /** Minutos abonados (abono parcial); vazio = dia inteiro. */
+  minutes?: number | null;
 };
 
 export type DayStatus =
@@ -93,8 +95,13 @@ export const nextPunchType = (punches: Punch[]): PunchType => {
   return last?.type === "in" ? "out" : "in";
 };
 
-export const targetFor = (date: string, override: DayOverride | null, dailyMinutes: number) =>
-  override || isWeekend(parseISO(date)) ? 0 : dailyMinutes;
+export function targetFor(date: string, override: DayOverride | null, dailyMinutes: number) {
+  if (isWeekend(parseISO(date))) return 0;
+  if (override?.minutes) return Math.max(0, dailyMinutes - override.minutes);
+  return override ? 0 : dailyMinutes;
+}
+
+const isFullDay = (override: DayOverride | null) => !!override && !override.minutes;
 
 type Now = { date: string; minutes: number };
 
@@ -128,11 +135,11 @@ export function summarizeDay(
   if (invalid) status = "inconsistente";
   else if (openSince !== null) status = isToday ? "em-andamento" : "incompleto";
   else if (sorted.length > 0) status = "ok";
-  else if (override) status = "abonado";
+  else if (isFullDay(override)) status = "abonado";
   else if (target === 0) status = "folga-semanal";
   else status = isToday ? "pendente" : "falta";
 
-  if (override && sorted.length > 0 && status === "ok") status = "abonado";
+  if (isFullDay(override) && sorted.length > 0 && status === "ok") status = "abonado";
 
   const balance = worked - target;
   // Hoje só entra no banco o excedente, para não "devermos" horas no meio do expediente.
@@ -151,6 +158,29 @@ export function summarizeDay(
     isToday,
   };
 }
+
+/** Horário em que, mantendo a entrada aberta desde agora, o dia atinge a meta. */
+export const closeTime = (day: DaySummary, nowMinutes: number) =>
+  toTime(nowMinutes + Math.max(0, day.target - day.worked));
+
+/** "Meta de 06:00 (atestado de 02:00)", "Meta de 00:00 (dia abonado)" ou "Meta de 08:00". */
+export function targetDescription(day: DaySummary) {
+  const text = `Meta de ${formatDuration(day.target)}`;
+  const override = day.override;
+  if (!override) return text;
+  if (!override.minutes) return `${text} (dia abonado)`;
+  return `${text} (${OVERRIDE_LABELS[override.kind].toLowerCase()} de ${formatDuration(override.minutes)})`;
+}
+
+/** Valor do campo "Horas abonadas": HH:MM no abono parcial, vazio caso contrário. */
+export const overrideHoursValue = (override: DayOverride | null) =>
+  override?.minutes ? formatDuration(override.minutes) : "";
+
+/** Rótulo do badge do abono parcial ("Atestado 02:00"); null para dia inteiro ou sem abono. */
+export const partialOverrideLabel = (override: DayOverride | null) =>
+  override?.minutes
+    ? `${OVERRIDE_LABELS[override.kind]} ${formatDuration(override.minutes)}`
+    : null;
 
 export type ReportInput = {
   startDate: string;

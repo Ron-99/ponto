@@ -9,10 +9,12 @@ import { ManualPunchDialog } from "@/components/manual-punch-dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { loadBank } from "@/lib/data";
 import {
+  closeTime,
   formatDuration,
   needsAttention,
   nextPunchType,
   summarizeDay,
+  targetDescription,
   toTime,
   weekEnd,
   weekKey,
@@ -102,10 +104,7 @@ async function Dashboard() {
             <CardTitle className="flex items-center gap-2">
               Hoje <StatusBadge day={today} />
             </CardTitle>
-            <CardDescription>
-              Meta de {formatDuration(today.target)}
-              {today.override ? " (dia abonado)" : ""}
-            </CardDescription>
+            <CardDescription>{targetDescription(today)}</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
             <div className="flex items-center gap-2">
@@ -129,7 +128,7 @@ async function Dashboard() {
               {open && remaining > 0 && (
                 <Stat
                   label={`Saída para fechar ${formatDuration(today.target)}`}
-                  value={toTime(now.minutes + remaining)}
+                  value={closeTime(today, now.minutes)}
                 />
               )}
               {open && (

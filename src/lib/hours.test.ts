@@ -1,12 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildReport,
+  closeTime,
   type DayOverride,
   formatDuration,
   groupByWeek,
   nextPunchType,
+  overrideHoursValue,
   type Punch,
+  partialOverrideLabel,
   summarizeDay,
+  targetDescription,
+  targetFor,
   validateSequence,
 } from "./hours";
 
@@ -173,4 +178,85 @@ test("formatDuration", () => {
   expect(formatDuration(90, true)).toBe("+01:30");
   expect(formatDuration(-485, true)).toBe("−08:05");
   expect(formatDuration(0, true)).toBe("00:00");
+});
+
+describe("abono parcial", () => {
+  const partial = (date: string, minutes: number): DayOverride => ({
+    date,
+    kind: "atestado",
+    note: null,
+    minutes,
+  });
+  const full = (date: string): DayOverride => ({
+    date,
+    kind: "atestado",
+    note: null,
+    minutes: null,
+  });
+
+  test("abono parcial reduz a meta", () => {
+    expect(targetFor(MON, partial(MON, 120), 480)).toBe(360);
+    expect(summarizeDay(MON, [], partial(MON, 120), 480, past).target).toBe(360);
+  });
+
+  test("abono parcial nunca deixa meta negativa", () => {
+    expect(targetFor(MON, partial(MON, 120), 120)).toBe(0);
+    expect(targetFor(MON, partial(MON, 120), 60)).toBe(0);
+  });
+
+  test("abono parcial sem batidas é falta", () => {
+    const d = summarizeDay(MON, [], partial(MON, 120), 480, past);
+    expect(d.status).toBe("falta");
+    expect(d.bankDelta).toBe(-360);
+  });
+
+  test("abono parcial com pares fechados é ok", () => {
+    const d = summarizeDay(
+      MON,
+      punches(MON, "08:00", "12:00", "13:00", "15:00"),
+      partial(MON, 120),
+      480,
+      past,
+    );
+    expect(d.status).toBe("ok");
+    expect(d.balance).toBe(0);
+  });
+
+  test("abono de dia inteiro mantém meta zero", () => {
+    const empty = summarizeDay(MON, [], full(MON), 480, past);
+    expect(empty.target).toBe(0);
+    expect(empty.status).toBe("abonado");
+    const worked = summarizeDay(MON, punches(MON, "08:00", "10:00"), full(MON), 480, past);
+    expect(worked.target).toBe(0);
+    expect(worked.status).toBe("abonado");
+  });
+
+  test("saída para fechar usa meta reduzida", () => {
+    const now = { date: MON, minutes: 9 * 60 };
+    const d = summarizeDay(MON, punches(MON, "08:00"), partial(MON, 120), 480, now);
+    expect(formatDuration(d.target)).toBe("06:00");
+    expect(closeTime(d, now.minutes)).toBe("14:00");
+  });
+
+  test("descrição da meta do dia", () => {
+    expect(targetDescription(summarizeDay(MON, [], partial(MON, 120), 480, past))).toBe(
+      "Meta de 06:00 (atestado de 02:00)",
+    );
+    expect(targetDescription(summarizeDay(MON, [], full(MON), 480, past))).toBe(
+      "Meta de 00:00 (dia abonado)",
+    );
+    expect(targetDescription(summarizeDay(MON, [], null, 480, past))).toBe("Meta de 08:00");
+  });
+
+  test("valor inicial das horas abonadas", () => {
+    expect(overrideHoursValue(partial(MON, 120))).toBe("02:00");
+    expect(overrideHoursValue(full(MON))).toBe("");
+    expect(overrideHoursValue(null)).toBe("");
+  });
+
+  test("badge do abono parcial", () => {
+    expect(partialOverrideLabel(partial(MON, 120))).toBe("Atestado 02:00");
+    expect(partialOverrideLabel(full(MON))).toBeNull();
+    expect(partialOverrideLabel(null)).toBeNull();
+  });
 });

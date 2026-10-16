@@ -47,6 +47,7 @@ Para migrar os dados locais para o Turso, faça isto antes de abrir o app em pro
 - **Batida avulsa** registra um horário escolhido. As batidas do dia precisam alternar entrada e saída, começando por entrada.
 - Um dia passado com número ímpar de batidas aparece como pendente. Só os pares fechados contam no saldo.
 - Um dia útil passado sem batidas conta −8h. Marque feriados, folgas e atestados como **abono** (meta de 0h).
+- **Abono parcial**: preencha as horas abonadas (HH:MM) antes de escolher o tipo do abono. A meta do dia vira a jornada menos essas horas. Por exemplo, uma consulta de 2h com atestado deixa a meta em 6h. Só vale para dias úteis, e as horas precisam ser menores que a jornada.
 - Horas trabalhadas no fim de semana ou em dia abonado contam inteiras como extra.
 - O saldo é acumulado desde a data de início do banco (por padrão, a primeira batida). Durante o dia de hoje, só o excedente entra no total. Assim o saldo não fica negativo no meio do expediente.
 
@@ -55,6 +56,6 @@ Para migrar os dados locais para o Turso, faça isto antes de abrir o app em pro
 | Comando          | O que faz                    |
 | ---------------- | ---------------------------- |
 | `bun dev`        | servidor de desenvolvimento  |
-| `bun test`       | testes das regras de cálculo |
+| `bun run test`   | testes (regras, actions e banco) |
 | `bun run lint`   | Biome (lint + formatação)    |
 | `bun run format` | Biome com correções          |

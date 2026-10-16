@@ -1,11 +1,13 @@
 "use server";
 
+import { isWeekend, parseISO } from "date-fns";
 import { refresh } from "next/cache";
 import { cookies } from "next/headers";
 import { isValidSession, SESSION_COOKIE } from "@/lib/auth";
 import { currentNow } from "@/lib/data";
 import * as db from "@/lib/db";
 import {
+  formatDuration,
   nextPunchType,
   OVERRIDE_LABELS,
   type OverrideKind,
@@ -105,19 +107,45 @@ export async function removePunch(id: number): Promise<ActionResult> {
   return { ok: true, message: "Batida excluída." };
 }
 
+/**
+ * Marca o abono do dia. Com `hours` (HH:MM) o abono é parcial e só reduz a meta;
+ * vazio abona o dia inteiro.
+ */
 export async function setDayOverride(
   date: string,
   kind: OverrideKind | null,
+  hours = "",
 ): Promise<ActionResult> {
   if (!(await authorized())) return UNAUTHORIZED;
   if (!DATE_RE.test(date)) return { ok: false, error: "Data inválida." };
   if (kind && !(kind in OVERRIDE_LABELS)) return { ok: false, error: "Tipo inválido." };
-  await db.setOverride(date, kind);
+
+  let minutes: number | null = null;
+  if (kind && hours) {
+    const match = /^(\d{2}):([0-5]\d)$/.exec(hours);
+    minutes = match ? Number(match[1]) * 60 + Number(match[2]) : 0;
+    if (!minutes) return { ok: false, error: "Horas abonadas devem estar no formato HH:MM." };
+    if (isWeekend(parseISO(date))) return { ok: false, error: "Fim de semana já tem meta de 0h." };
+    const { dailyMinutes } = await db.getSettings();
+    if (minutes >= dailyMinutes) {
+      return {
+        ok: false,
+        error: `Abono parcial deve ser menor que a jornada de ${formatDuration(dailyMinutes)}. Para o dia todo, deixe as horas em branco.`,
+      };
+    }
+  }
+
+  await db.setOverride(date, kind, null, minutes);
   refresh();
-  return {
-    ok: true,
-    message: kind ? `Dia marcado como ${OVERRIDE_LABELS[kind].toLowerCase()}.` : "Abono removido.",
-  };
+  if (!kind) return { ok: true, message: "Abono removido." };
+  if (minutes) {
+    const done = kind === "folga" ? "registrada" : "registrado";
+    return {
+      ok: true,
+      message: `${OVERRIDE_LABELS[kind]} de ${formatDuration(minutes)} ${done}.`,
+    };
+  }
+  return { ok: true, message: `Dia marcado como ${OVERRIDE_LABELS[kind].toLowerCase()}.` };
 }
 
 export async function updateSettings(input: {

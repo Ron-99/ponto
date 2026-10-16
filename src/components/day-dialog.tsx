@@ -24,6 +24,7 @@ import {
   nextPunchType,
   OVERRIDE_LABELS,
   type OverrideKind,
+  overrideHoursValue,
   type Punch,
   type PunchType,
   validateSequence,
@@ -112,19 +113,39 @@ const OVERRIDE_OPTIONS: (OverrideKind | null)[] = [null, "feriado", "folga", "at
 function OverridePicker({ day }: { day: DaySummary }) {
   const { pending, run } = useAction();
   const current = day.override?.kind ?? null;
+  const savedHours = overrideHoursValue(day.override);
+  const [hours, setHours] = useState(savedHours);
   return (
-    <div className="flex flex-wrap gap-1">
-      {OVERRIDE_OPTIONS.map((kind) => (
-        <Button
-          key={kind ?? "none"}
-          size="sm"
-          variant={current === kind ? "default" : "outline"}
-          disabled={pending}
-          onClick={() => current !== kind && run(() => setDayOverride(day.date, kind))}
-        >
-          {kind ? OVERRIDE_LABELS[kind] : "Dia normal"}
-        </Button>
-      ))}
+    <div className="grid gap-2">
+      <div className="flex flex-wrap gap-1">
+        {OVERRIDE_OPTIONS.map((kind) => (
+          <Button
+            key={kind ?? "none"}
+            size="sm"
+            variant={current === kind ? "default" : "outline"}
+            disabled={pending}
+            onClick={() =>
+              (current !== kind || (kind && hours !== savedHours)) &&
+              run(() => setDayOverride(day.date, kind, hours))
+            }
+          >
+            {kind ? OVERRIDE_LABELS[kind] : "Dia normal"}
+          </Button>
+        ))}
+      </div>
+      <div className="flex items-center gap-2">
+        <Label htmlFor={`hours-${day.date}`} className="font-normal">
+          Horas abonadas
+        </Label>
+        <Input
+          id={`hours-${day.date}`}
+          className="w-24"
+          placeholder="dia todo"
+          pattern="\d{2}:[0-5]\d"
+          value={hours}
+          onChange={(e) => setHours(e.target.value)}
+        />
+      </div>
     </div>
   );
 }
@@ -167,9 +188,11 @@ export function DayDialog({ day }: { day: DaySummary }) {
 
         <div className="grid gap-2">
           <Label>Abono do dia</Label>
-          <OverridePicker day={day} />
+          {/* A key reinicia o campo de horas depois de salvar. */}
+          <OverridePicker key={`${day.override?.kind}-${day.override?.minutes}`} day={day} />
           <p className="text-xs text-muted-foreground">
-            Dias abonados têm meta de 0h; horas trabalhadas neles contam como extra.
+            Dias abonados têm meta de 0h; horas trabalhadas neles contam como extra. Para abonar só
+            parte do dia (ex.: consulta de 2h), preencha as horas (HH:MM) antes de escolher o tipo.
           </p>
         </div>
       </DialogContent>

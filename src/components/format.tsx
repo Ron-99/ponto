@@ -2,7 +2,13 @@ import { cn } from "cn";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
-import { type DayStatus, type DaySummary, formatDuration, OVERRIDE_LABELS } from "@/lib/hours";
+import {
+  type DayStatus,
+  type DaySummary,
+  formatDuration,
+  OVERRIDE_LABELS,
+  partialOverrideLabel,
+} from "@/lib/hours";
 
 /** Formata em pt-BR com a primeira letra maiúscula ("Quinta-feira, 15 de outubro"). */
 export const formatDate = (date: string, pattern = "dd/MM/yyyy") => {
@@ -44,7 +50,14 @@ export function StatusBadge({ day }: { day: DaySummary }) {
   const s = STATUS[day.status];
   const label =
     day.status === "abonado" && day.override ? OVERRIDE_LABELS[day.override.kind] : s.label;
-  return <Badge variant={s.variant}>{label}</Badge>;
+  const partial = partialOverrideLabel(day.override);
+  if (!partial) return <Badge variant={s.variant}>{label}</Badge>;
+  return (
+    <span className="inline-flex flex-wrap gap-1">
+      <Badge variant={s.variant}>{label}</Badge>
+      <Badge variant="outline">{partial}</Badge>
+    </span>
+  );
 }
 
 export function PunchChips({ day }: { day: DaySummary }) {

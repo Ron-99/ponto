@@ -41,6 +41,40 @@ const SCHEMA = [
   )`,
 ];
 
+const UPSERT_SETTING =
+  "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value";
+
+/**
+ * Migrações em ordem; a posição + 1 é a versão. Cada uma roda num batch junto com a
+ * gravação de `schema_version`, então ou as duas coisas persistem ou nenhuma.
+ */
+const MIGRATIONS: string[][] = [
+  // 1: abono parcial (minutos abonados; NULL = dia inteiro)
+  ["ALTER TABLE day_overrides ADD COLUMN minutes INTEGER CHECK (minutes IS NULL OR minutes > 0)"],
+];
+
+async function schemaVersion(client: Client) {
+  const { rows } = await client.execute("SELECT value FROM settings WHERE key = 'schema_version'");
+  return Number(rows[0]?.value ?? 0);
+}
+
+export async function applyMigrations(client: Client) {
+  for (let version = (await schemaVersion(client)) + 1; version <= MIGRATIONS.length; version++) {
+    try {
+      await client.batch(
+        [
+          ...MIGRATIONS[version - 1],
+          { sql: UPSERT_SETTING, args: ["schema_version", String(version)] },
+        ],
+        "write",
+      );
+    } catch (error) {
+      // Outra instância pode ter aplicado a mesma migração ao mesmo tempo.
+      if ((await schemaVersion(client)) < version) throw error;
+    }
+  }
+}
+
 // Reaproveita a conexão (e a migração) entre requisições e recarregamentos do dev server.
 const globalForDb = globalThis as unknown as { pontoDb?: Promise<Client> };
 
@@ -48,6 +82,7 @@ function db(): Promise<Client> {
   globalForDb.pontoDb ??= (async () => {
     const client = connect();
     await client.batch(SCHEMA, "write");
+    await applyMigrations(client);
     return client;
   })().catch((error) => {
     globalForDb.pontoDb = undefined; // permite tentar de novo na próxima requisição
@@ -110,14 +145,21 @@ export const updatePunch = (
 export const deletePunch = (id: number) => run("DELETE FROM punches WHERE id = ?", [id]);
 
 export const listOverrides = () =>
-  all<DayOverride>("SELECT date, kind, note FROM day_overrides ORDER BY date");
+  all<DayOverride>("SELECT date, kind, note, minutes FROM day_overrides ORDER BY date");
 
-export const setOverride = (date: string, kind: OverrideKind | null, note?: string | null) =>
+/** `minutes` vazio abona o dia inteiro; preenchido, reduz a meta do dia. */
+export const setOverride = (
+  date: string,
+  kind: OverrideKind | null,
+  note?: string | null,
+  minutes?: number | null,
+) =>
   kind
     ? run(
-        `INSERT INTO day_overrides (date, kind, note) VALUES (?, ?, ?)
-         ON CONFLICT (date) DO UPDATE SET kind = excluded.kind, note = excluded.note`,
-        [date, kind, note || null],
+        `INSERT INTO day_overrides (date, kind, note, minutes) VALUES (?, ?, ?, ?)
+         ON CONFLICT (date) DO UPDATE
+         SET kind = excluded.kind, note = excluded.note, minutes = excluded.minutes`,
+        [date, kind, note || null, minutes || null],
       )
     : run("DELETE FROM day_overrides WHERE date = ?", [date]);
 
@@ -137,12 +179,10 @@ export async function getSettings(): Promise<Settings> {
 }
 
 export async function saveSettings(s: Settings) {
-  const upsert =
-    "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value";
   await (await db()).batch(
     [
-      { sql: upsert, args: ["daily_minutes", String(s.dailyMinutes)] },
-      { sql: upsert, args: ["start_date", s.startDate ?? ""] },
+      { sql: UPSERT_SETTING, args: ["daily_minutes", String(s.dailyMinutes)] },
+      { sql: UPSERT_SETTING, args: ["start_date", s.startDate ?? ""] },
     ],
     "write",
   );
