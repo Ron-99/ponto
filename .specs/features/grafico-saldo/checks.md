@@ -15,39 +15,39 @@ hoje no banco temporário.
 
 ### S1 - A série e a variação · 2 files · 18 KB · ~5k
 
-- [ ] **C1** - Com o banco desde 2026-07-01 e hoje 2026-10-16, a série tem 56 pontos. O primeiro é 2026-08-22, o último é 2026-10-16, e cada valor é o `accumulated` do dia. (AC 1)
+- [x] **C1** - Com o banco desde 2026-07-01 e hoje 2026-10-16, a série tem 56 pontos. O primeiro é 2026-08-22, o último é 2026-10-16, e cada valor é o `accumulated` do dia. (AC 1)
 Proof: `bun test --conditions react-server src/lib/hours.test.ts -t "série das últimas 8 semanas"`
 
-- [ ] **C2** - Com o banco desde 2026-10-07 e hoje 2026-10-16, a série tem 10 pontos e começa em 2026-10-07 (AC 2)
+- [x] **C2** - Com o banco desde 2026-10-07 e hoje 2026-10-16, a série tem 10 pontos e começa em 2026-10-07 (AC 2)
 Proof: `bun test --conditions react-server src/lib/hours.test.ts -t "série começa no início do banco"`
 
-- [ ] **C3** - Hoje em andamento com `balance` −120 e acumulado anterior +90: o último ponto é +90, igual ao `total` de `loadBank` (`days.at(-1).accumulated`) (AC 3)
+- [x] **C3** - Hoje em andamento com `balance` −120 e acumulado anterior +90: o último ponto é +90, igual ao `total` de `loadBank` (`days.at(-1).accumulated`) (AC 3)
 Proof: `bun test --conditions react-server src/lib/hours.test.ts -t "último ponto é o saldo do topo"`
 
-- [ ] **C4** - Do primeiro ponto (22/08) ao último, +270 dá "Subiu 04:30 desde 22/08.", −135 dá "Caiu 02:15 desde 22/08." e 0 dá "Igual a 22/08." (AC 4)
+- [x] **C4** - Do primeiro ponto (22/08) ao último, +270 dá "Subiu 04:30 desde 22/08.", −135 dá "Caiu 02:15 desde 22/08." e 0 dá "Igual a 22/08." (AC 4)
 Proof: `bun test --conditions react-server src/lib/hours.test.ts -t "frase da variação"`
 
 ### S2 - O gráfico no painel · 4 files · 22 KB · ~6k
 
-- [ ] **C5** - A escala vertical sempre inclui o zero, e a geometria traz uma linha de referência nele. Uma série toda positiva (+30 a +270) põe o zero na base, uma toda negativa põe no topo, e uma que cruza põe no meio. (AC 5)
+- [x] **C5** - A escala vertical sempre inclui o zero, e a geometria traz uma linha de referência nele. Uma série toda positiva (+30 a +270) põe o zero na base, uma toda negativa põe no topo, e uma que cruza põe no meio. (AC 5)
 Proof: `bun test --conditions react-server src/lib/hours.test.ts -t "gráfico sempre mostra o zero"`
 
-- [ ] **C6** - Para uma série de −60 a +270 que começa em 22/08, os rótulos são `+04:30` no topo, `−01:00` na base, `22/08` à esquerda e `hoje` à direita (AC 6)
+- [x] **C6** - Para uma série de −60 a +270 que começa em 22/08, os rótulos são `+04:30` no topo, `−01:00` na base, `22/08` à esquerda e `hoje` à direita (AC 6)
 Proof: `bun test --conditions react-server src/lib/hours.test.ts -t "rótulos dos eixos"`
 
-- [ ] **C7** - Uma série que cruza o zero vira trechos com sinal: o trecho acima do zero usa a mesma classe de cor do saldo positivo de `Balance` (`text-emerald-600 dark:text-emerald-400`), e o abaixo, a do negativo (`text-red-600 dark:text-red-400`). O ponto de cruzamento fica exatamente no zero. `Balance` e o gráfico usam a mesma função de cor. (AC 7)
+- [x] **C7** - Uma série que cruza o zero vira trechos com sinal: o trecho acima do zero usa a mesma classe de cor do saldo positivo de `Balance` (`text-emerald-600 dark:text-emerald-400`), e o abaixo, a do negativo (`text-red-600 dark:text-red-400`). O ponto de cruzamento fica exatamente no zero. `Balance` e o gráfico usam a mesma função de cor. (AC 7)
 Proof: `bun test --conditions react-server src/lib/hours.test.ts -t "trechos acima e abaixo do zero"`
 
-- [ ] **C8** - Uma série de 1 ponto não gera geometria e devolve a mensagem "O gráfico aparece a partir do segundo dia do banco." (AC 8)
+- [x] **C8** - Uma série de 1 ponto não gera geometria e devolve a mensagem "O gráfico aparece a partir do segundo dia do banco." (AC 8)
 Proof: `bun test --conditions react-server src/lib/hours.test.ts -t "gráfico precisa de dois dias"`
 
-- [ ] **C9** - O `aria-label` de uma série que subiu 04:30 desde 22/08 até +01:30 é "Subiu 04:30 desde 22/08. Saldo de hoje: +01:30." (AC 9)
+- [x] **C9** - O `aria-label` de uma série que subiu 04:30 desde 22/08 até +01:30 é "Subiu 04:30 desde 22/08. Saldo de hoje: +01:30." (AC 9)
 Proof: `bun test --conditions react-server src/lib/hours.test.ts -t "descrição acessível do gráfico"`
 
-- [ ] **C10** - No painel em 360×800, com o banco de 10 dias, existe o card "Saldo nas últimas 8 semanas" com um `svg[role="img"]` cujo `aria-label` começa com "Subiu", "Caiu" ou "Igual". `document.documentElement.scrollWidth` ≤ 360, e a largura do SVG não passa a do card. (AC 5, AC 9, AC 10)
+- [x] **C10** - No painel em 360×800, com o banco de 10 dias, existe o card "Saldo nas últimas 8 semanas" com um `svg[role="img"]` cujo `aria-label` começa com "Subiu", "Caiu" ou "Igual". `document.documentElement.scrollWidth` ≤ 360, e a largura do SVG não passa a do card. (AC 5, AC 9, AC 10)
 Proof: `bun test ./e2e/pwa.e2e.ts -t "gráfico do saldo cabe em 360px"`
 
-- [ ] **C11** - Nenhuma dependência nova: `package.json` e `bun.lock` não mudam na feature (door 1)
+- [x] **C11** - Nenhuma dependência nova: `package.json` e `bun.lock` não mudam na feature (door 1)
 Proof: `git diff --exit-code 821eac4 -- package.json bun.lock`
 
 ## Coverage

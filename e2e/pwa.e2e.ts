@@ -152,7 +152,10 @@ describe("PWA", () => {
     process.env.APP_PASSWORD = PASSWORD;
     const { sessionToken } = await import("../src/lib/auth");
     // Banco de 10 dias: uma requisição autenticada cria as tabelas, depois o teste grava o início.
-    await fetch(`${BASE}/`, { headers: { cookie: `ponto_session=${sessionToken()}` } });
+    // Lê o corpo todo: o painel chega por streaming, e o banco só existe depois do render.
+    await (
+      await fetch(`${BASE}/`, { headers: { cookie: `ponto_session=${sessionToken()}` } })
+    ).text();
     const start = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(
       new Date(Date.now() - 9 * 24 * 60 * 60 * 1000),
     );
