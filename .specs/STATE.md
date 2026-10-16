@@ -9,7 +9,7 @@
 
 ## Handoff
 
-**Feature**: pwa
-**Where**: as três features de prioridade alta estão commitadas. abono-parcial e feriados-nacionais estão verificados (PASS); pwa está em verificação.
-**Next step**: confirmar a instalação num celular real (AC 6 e 8 do pwa) e fazer deploy, que ainda não foi feito
+**Feature**: nenhuma em andamento
+**Where**: abono-parcial, feriados-nacionais e pwa verificados (PASS). Deploy na Vercel em 2026-10-16 (`eec9e69`), confirmado em produção e no celular pelo usuário.
+**Next step**: próximo item do `ROADMAP.md` (prioridade média), a escolher
 **Blockers**: none
